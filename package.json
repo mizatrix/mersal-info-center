@@ -2,6 +2,7 @@
   "name": "mersal-info-center",
   "version": "3.0.0",
   "description": "مركز معلومات مرسال — Mersal Foundation Information Center",
+  "author": "Nada Naser <nadanaser168@gmail.com>",
   "main": "main.js",
   "scripts": {
     "start": "electron .",

@@ -109,9 +109,10 @@ mersal-info-center/
 
 ---
 
-## 👥 المساهمون | Contributors
+## 👥 فريق العمل | Team
 
-- **Moataz Samy** — Development & Architecture
+- **Nada Naser** — Principle Developer
+- **Moataz Samy** — Architecture & Support
 
 ---
 
