@@ -5,41 +5,186 @@ const http = require('http');
 const XLSX = require('xlsx');
 const fs = require('fs');
 const os = require('os');
+const Database = require('better-sqlite3');
 
 let mainWindow;
 
-// ── Cache Config ──
-const CACHE_DIR = path.join(os.homedir(), '.mersal-info-center');
-const CACHE_FILE = path.join(CACHE_DIR, 'data_cache.json');
-const CACHE_MAX_AGE_HOURS = 6; // Re-download if cache is older than 6 hours
+// ── SQLite Database Config ──
+const DB_DIR = path.join(os.homedir(), '.mersal-info-center');
+const DB_PATH = path.join(DB_DIR, 'mersal.db');
+const CACHE_MAX_AGE_HOURS = 6; // Re-download if data is older than 6 hours
 
-function ensureCacheDir() {
-  if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true });
+let db = null;
+
+function ensureDbDir() {
+  if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
+}
+
+function getDatabase() {
+  if (db) return db;
+  ensureDbDir();
+  db = new Database(DB_PATH);
+  db.pragma('journal_mode = WAL');   // Much faster for reads
+  db.pragma('synchronous = NORMAL'); // Safe enough, faster than FULL
+
+  // Create tables if they don't exist
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      c_code TEXT,
+      p_code TEXT,
+      name TEXT,
+      age TEXT,
+      year TEXT,
+      nationality TEXT,
+      national_id TEXT,
+      individual_card TEXT,
+      family_file TEXT,
+      negotiation_code TEXT,
+      asylum_status TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS services (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      c_code TEXT,
+      p_code TEXT,
+      file_name TEXT,
+      services_count TEXT,
+      cost TEXT,
+      nationality TEXT,
+      asylum_status TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS meta (
+      key TEXT PRIMARY KEY,
+      value TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_cases_ccode ON cases(c_code);
+    CREATE INDEX IF NOT EXISTS idx_cases_pcode ON cases(p_code);
+    CREATE INDEX IF NOT EXISTS idx_cases_name ON cases(name);
+    CREATE INDEX IF NOT EXISTS idx_cases_nationality ON cases(nationality);
+    CREATE INDEX IF NOT EXISTS idx_services_ccode ON services(c_code);
+  `);
+
+  console.log(`🗄️ SQLite database ready at ${DB_PATH}`);
+  return db;
+}
+
+// ── Column mapping: JS object keys ↔ SQLite columns ──
+const CASES_COL_MAP = {
+  'C-Code': 'c_code',
+  'P-Code': 'p_code',
+  'Name': 'name',
+  'Age': 'age',
+  'Year': 'year',
+  'الجنسية': 'nationality',
+  'الرقم القومى': 'national_id',
+  'رقم كارت المفاوضية للفرد': 'individual_card',
+  'رقم ملف المفاوضية': 'family_file',
+  'كود المفاوضية': 'negotiation_code',
+  'موقف اللجوء': 'asylum_status',
+};
+
+const SERVICES_COL_MAP = {
+  'C-Code': 'c_code',
+  'P-Code': 'p_code',
+  'الملف': 'file_name',
+  'عدد الخدمات': 'services_count',
+  'التكلفة': 'cost',
+  'الجنسية': 'nationality',
+  'موقف اللجوء': 'asylum_status',
+};
+
+// Reverse maps: SQLite column → JS key
+const CASES_REVERSE_MAP = Object.fromEntries(Object.entries(CASES_COL_MAP).map(([k, v]) => [v, k]));
+const SERVICES_REVERSE_MAP = Object.fromEntries(Object.entries(SERVICES_COL_MAP).map(([k, v]) => [v, k]));
+
+function dbRowToJsObject(row, reverseMap) {
+  const obj = {};
+  for (const [dbCol, jsKey] of Object.entries(reverseMap)) {
+    if (dbCol === 'id') continue;
+    obj[jsKey] = row[dbCol] ?? '';
+  }
+  return obj;
 }
 
 function getCachedData() {
   try {
-    if (!fs.existsSync(CACHE_FILE)) return null;
-    const stat = fs.statSync(CACHE_FILE);
-    const ageHours = (Date.now() - stat.mtimeMs) / (1000 * 60 * 60);
-    console.log(`📦 Loading from cache (${Math.round(ageHours * 10) / 10}h old)...`);
-    const raw = fs.readFileSync(CACHE_FILE, 'utf8');
-    const data = JSON.parse(raw);
-    data.ageHours = ageHours; // Add age to signal UI if refresh is needed
-    return data;
+    const database = getDatabase();
+    const casesCount = database.prepare('SELECT COUNT(*) as cnt FROM cases').get().cnt;
+    if (casesCount === 0) return null;
+
+    const lastSync = database.prepare("SELECT value FROM meta WHERE key = 'last_sync'").get();
+    const syncTime = lastSync ? parseInt(lastSync.value) : 0;
+    const ageHours = (Date.now() - syncTime) / (1000 * 60 * 60);
+
+    console.log(`🗄️ Loading from SQLite (${Math.round(ageHours * 10) / 10}h old, ${casesCount} cases)...`);
+    const startMs = Date.now();
+
+    const casesRows = database.prepare('SELECT * FROM cases').all();
+    const servicesRows = database.prepare('SELECT * FROM services').all();
+
+    const cases = casesRows.map(r => dbRowToJsObject(r, CASES_REVERSE_MAP));
+    const services = servicesRows.map(r => dbRowToJsObject(r, SERVICES_REVERSE_MAP));
+
+    const readMs = Date.now() - startMs;
+    console.log(`⚡ SQLite read: ${cases.length} cases + ${services.length} services in ${readMs}ms`);
+
+    return { cases, services, ageHours };
   } catch (err) {
-    console.warn('⚠️ Cache read error:', err.message);
+    console.warn('⚠️ SQLite read error:', err.message);
     return null;
   }
 }
 
 function saveCacheData(data) {
   try {
-    ensureCacheDir();
-    fs.writeFileSync(CACHE_FILE, JSON.stringify(data));
-    console.log(`💾 Data cached to ${CACHE_FILE}`);
+    const database = getDatabase();
+    const startMs = Date.now();
+
+    const insertCase = database.prepare(`
+      INSERT INTO cases (c_code, p_code, name, age, year, nationality, national_id, individual_card, family_file, negotiation_code, asylum_status)
+      VALUES (@c_code, @p_code, @name, @age, @year, @nationality, @national_id, @individual_card, @family_file, @negotiation_code, @asylum_status)
+    `);
+
+    const insertService = database.prepare(`
+      INSERT INTO services (c_code, p_code, file_name, services_count, cost, nationality, asylum_status)
+      VALUES (@c_code, @p_code, @file_name, @services_count, @cost, @nationality, @asylum_status)
+    `);
+
+    const bulkInsert = database.transaction((casesArr, servicesArr) => {
+      // Clear existing data
+      database.prepare('DELETE FROM cases').run();
+      database.prepare('DELETE FROM services').run();
+
+      // Insert cases
+      for (const row of casesArr) {
+        const params = {};
+        for (const [jsKey, dbCol] of Object.entries(CASES_COL_MAP)) {
+          params[dbCol] = String(row[jsKey] ?? '').trim();
+        }
+        insertCase.run(params);
+      }
+
+      // Insert services
+      for (const row of servicesArr) {
+        const params = {};
+        for (const [jsKey, dbCol] of Object.entries(SERVICES_COL_MAP)) {
+          params[dbCol] = String(row[jsKey] ?? '').trim();
+        }
+        insertService.run(params);
+      }
+
+      // Update sync timestamp
+      database.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('last_sync', ?)").run(String(Date.now()));
+    });
+
+    bulkInsert(data.cases, data.services);
+    const writeMs = Date.now() - startMs;
+    console.log(`💾 SQLite write: ${data.cases.length} cases + ${data.services.length} services in ${writeMs}ms`);
   } catch (err) {
-    console.warn('⚠️ Cache write error:', err.message);
+    console.warn('⚠️ SQLite write error:', err.message);
   }
 }
 
@@ -224,13 +369,17 @@ ipcMain.handle('load-data', async () => {
     return { cases: data.cases, services: data.services, error: null, fromCache: false, needsRefresh: false };
   } catch (err) {
     console.error('❌ Error loading data:', err.message);
-    // Try stale cache as last resort
+    // Try stale DB as last resort (data may exist even if download fails)
     try {
-      if (fs.existsSync(CACHE_FILE)) {
-        console.log('🔄 Falling back to stale cache...');
-        const raw = fs.readFileSync(CACHE_FILE, 'utf8');
-        const stale = JSON.parse(raw);
-        return { cases: stale.cases, services: stale.services, error: null, fromCache: true, staleCache: true };
+      const staleDb = getDatabase();
+      const cnt = staleDb.prepare('SELECT COUNT(*) as cnt FROM cases').get().cnt;
+      if (cnt > 0) {
+        console.log('🔄 Falling back to stale SQLite data...');
+        const casesRows = staleDb.prepare('SELECT * FROM cases').all();
+        const servicesRows = staleDb.prepare('SELECT * FROM services').all();
+        const cases = casesRows.map(r => dbRowToJsObject(r, CASES_REVERSE_MAP));
+        const services = servicesRows.map(r => dbRowToJsObject(r, SERVICES_REVERSE_MAP));
+        return { cases, services, error: null, fromCache: true, staleCache: true };
       }
     } catch (e) { /* ignore */ }
     return { cases: [], services: [], error: err.message };
@@ -245,6 +394,60 @@ ipcMain.handle('refresh-data', async () => {
     return { cases: data.cases, services: data.services, error: null, fromCache: false };
   } catch (err) {
     console.error('❌ Error refreshing data:', err.message);
+    return { cases: [], services: [], error: err.message };
+  }
+});
+
+// ── IPC: Add Records Incrementally ──
+ipcMain.handle('add-records', async (event, { cases: newCases, services: newServices }) => {
+  try {
+    const database = getDatabase();
+
+    const insertCase = database.prepare(`
+      INSERT INTO cases (c_code, p_code, name, age, year, nationality, national_id, individual_card, family_file, negotiation_code, asylum_status)
+      VALUES (@c_code, @p_code, @name, @age, @year, @nationality, @national_id, @individual_card, @family_file, @negotiation_code, @asylum_status)
+    `);
+
+    const insertService = database.prepare(`
+      INSERT INTO services (c_code, p_code, file_name, services_count, cost, nationality, asylum_status)
+      VALUES (@c_code, @p_code, @file_name, @services_count, @cost, @nationality, @asylum_status)
+    `);
+
+    const bulkAdd = database.transaction(() => {
+      if (newCases && newCases.length > 0) {
+        for (const row of newCases) {
+          const params = {};
+          for (const [jsKey, dbCol] of Object.entries(CASES_COL_MAP)) {
+            params[dbCol] = String(row[jsKey] ?? '').trim();
+          }
+          insertCase.run(params);
+        }
+      }
+      if (newServices && newServices.length > 0) {
+        for (const row of newServices) {
+          const params = {};
+          for (const [jsKey, dbCol] of Object.entries(SERVICES_COL_MAP)) {
+            params[dbCol] = String(row[jsKey] ?? '').trim();
+          }
+          insertService.run(params);
+        }
+      }
+      // Update sync time
+      database.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('last_sync', ?)").run(String(Date.now()));
+    });
+
+    bulkAdd();
+
+    // Return full updated data
+    const casesRows = database.prepare('SELECT * FROM cases').all();
+    const servicesRows = database.prepare('SELECT * FROM services').all();
+    const cases = casesRows.map(r => dbRowToJsObject(r, CASES_REVERSE_MAP));
+    const services = servicesRows.map(r => dbRowToJsObject(r, SERVICES_REVERSE_MAP));
+
+    console.log(`➕ Added ${(newCases || []).length} cases, ${(newServices || []).length} services. Total: ${cases.length} cases, ${services.length} services`);
+    return { cases, services, error: null };
+  } catch (err) {
+    console.error('❌ Error adding records:', err.message);
     return { cases: [], services: [], error: err.message };
   }
 });
@@ -281,6 +484,11 @@ ipcMain.on('window-close', () => mainWindow?.close());
 app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
+  // Close SQLite connection gracefully
+  if (db) {
+    try { db.close(); } catch (e) { /* ignore */ }
+    db = null;
+  }
   if (process.platform !== 'darwin') app.quit();
 });
 

@@ -6,6 +6,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "rebuild": "npx electron-rebuild",
+    "postinstall": "npx electron-rebuild",
     "build:linux": "electron-builder --linux",
     "build:win": "electron-builder --win",
     "build:all": "electron-builder --linux --win"
@@ -19,23 +21,35 @@
     "files": [
       "main.js",
       "preload.js",
-      "src/**/*"
+      "src/**/*",
+      "node_modules/better-sqlite3/**/*"
+    ],
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**/*"
     ],
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "icon": "src/assets/logo.webp",
       "category": "Office"
     },
     "win": {
-      "target": ["nsis", "portable"],
+      "target": [
+        "nsis",
+        "portable"
+      ],
       "icon": "src/assets/logo.webp"
     }
   },
   "devDependencies": {
     "electron": "^33.0.0",
-    "electron-builder": "^25.0.0"
+    "electron-builder": "^25.0.0",
+    "electron-rebuild": "^3.2.9"
   },
   "dependencies": {
+    "better-sqlite3": "^12.8.0",
     "xlsx": "^0.18.5"
   }
 }
