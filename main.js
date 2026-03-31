@@ -22,13 +22,11 @@ function getCachedData() {
     if (!fs.existsSync(CACHE_FILE)) return null;
     const stat = fs.statSync(CACHE_FILE);
     const ageHours = (Date.now() - stat.mtimeMs) / (1000 * 60 * 60);
-    if (ageHours > CACHE_MAX_AGE_HOURS) {
-      console.log(`⏳ Cache expired (${Math.round(ageHours)}h old, max ${CACHE_MAX_AGE_HOURS}h)`);
-      return null;
-    }
     console.log(`📦 Loading from cache (${Math.round(ageHours * 10) / 10}h old)...`);
     const raw = fs.readFileSync(CACHE_FILE, 'utf8');
-    return JSON.parse(raw);
+    const data = JSON.parse(raw);
+    data.ageHours = ageHours; // Add age to signal UI if refresh is needed
+    return data;
   } catch (err) {
     console.warn('⚠️ Cache read error:', err.message);
     return null;
@@ -76,7 +74,7 @@ function downloadFile(url, outputPath) {
     const { spawn } = require('child_process');
 
     const proc = spawn('python3', [pythonScript, url, outputPath], {
-      timeout: 120000,
+      timeout: 300000,
     });
 
     let stderr = '';
@@ -96,6 +94,14 @@ function downloadFile(url, outputPath) {
   });
 }
 
+// ── Send progress updates to renderer ──
+function sendProgress(msg) {
+  console.log(`📡 ${msg}`);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('download-progress', msg);
+  }
+}
+
 // ── Download and parse fresh data from OneDrive ──
 async function downloadFreshData() {
   const CASES_URL = 'https://mersalcharity-my.sharepoint.com/:x:/g/personal/omar_abdallah_mersal-ngo_org1/IQAZAIJBc3rMR4MABivs_NY4AU9ZwCDrPRi6BkAVIcAzCsY?download=1';
@@ -104,11 +110,31 @@ async function downloadFreshData() {
   const CASES_SHEETS = ['all التكوين', 'تكوين كالك القديم'];
   const SERVICES_SHEETS = ['2014-2024'];
 
+  // Columns we actually use (strip everything else to shrink cache)
+  const CASES_KEEP = ['C-Code', 'P-Code', 'Name', 'Age', 'Year', 'الجنسية', 'الرقم القومى', 'رقم كارت المفاوضية للفرد', 'رقم ملف المفاوضية', 'كود المفاوضية', 'موقف اللجوء'];
+  const SERVICES_KEEP = ['C-Code', 'P-Code', 'الملف', 'عدد الخدمات', 'التكلفة', 'الجنسية', 'موقف اللجوء'];
+
   const tmpDir = os.tmpdir();
 
-  // Download cases
-  console.log('📥 Downloading cases file...');
-  const casesBuffer = await downloadFile(CASES_URL, path.join(tmpDir, 'mersal_cases.xlsx'));
+  // ⚡ Download BOTH files in parallel (halves total time)
+  sendProgress('📥 جارٍ تحميل ملفي الحالات والخدمات معاً...');
+  const startTime = Date.now();
+
+  const [casesBuffer, svcBuffer] = await Promise.all([
+    downloadFile(CASES_URL, path.join(tmpDir, 'mersal_cases.xlsx')).then(buf => {
+      sendProgress('✅ تم تحميل ملف الحالات');
+      return buf;
+    }),
+    downloadFile(SERVICES_URL, path.join(tmpDir, 'mersal_services.xlsx')).then(buf => {
+      sendProgress('✅ تم تحميل ملف الخدمات');
+      return buf;
+    }),
+  ]);
+
+  const dlTime = ((Date.now() - startTime) / 1000).toFixed(1);
+  sendProgress(`⬇️ اكتمل التحميل في ${dlTime} ثانية — جارٍ قراءة Excel...`);
+
+  // Parse cases
   const casesWb = XLSX.read(casesBuffer, { type: 'buffer' });
   console.log('📋 Cases sheets:', casesWb.SheetNames.join(', '));
 
@@ -126,17 +152,19 @@ async function downloadFreshData() {
     console.log(`  ⚠️ Fallback to first sheet "${firstSheet}": ${casesData.length} rows`);
   }
 
+  sendProgress(`📊 تمت قراءة ${casesData.length.toLocaleString()} حالة — جارٍ قراءة الخدمات...`);
+
+  // Strip unused columns from cases (massive cache savings)
   casesData = casesData.map(row => {
     const clean = {};
-    for (const [key, val] of Object.entries(row)) {
-      clean[key.trim()] = typeof val === 'string' ? val.trim() : val;
+    for (const key of CASES_KEEP) {
+      const val = row[key] ?? row[key.trim()] ?? '';
+      clean[key] = typeof val === 'string' ? val.trim() : val;
     }
     return clean;
   });
 
-  // Download services
-  console.log('📥 Downloading services file...');
-  const svcBuffer = await downloadFile(SERVICES_URL, path.join(tmpDir, 'mersal_services.xlsx'));
+  // Parse services
   const svcWb = XLSX.read(svcBuffer, { type: 'buffer' });
   console.log('📋 Services sheets:', svcWb.SheetNames.join(', '));
 
@@ -154,15 +182,20 @@ async function downloadFreshData() {
     console.log(`  ⚠️ Fallback to first sheet "${firstSheet}": ${servicesData.length} rows`);
   }
 
+  // Strip unused columns from services
   servicesData = servicesData.map(row => {
     const clean = {};
-    for (const [key, val] of Object.entries(row)) {
-      clean[key.trim()] = typeof val === 'string' ? val.trim() : val;
+    for (const key of SERVICES_KEEP) {
+      const val = row[key] ?? row[key.trim()] ?? '';
+      clean[key] = typeof val === 'string' ? val.trim() : val;
     }
     return clean;
   });
 
-  console.log(`\n✅ Total: ${casesData.length} cases, ${servicesData.length} services`);
+  const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+  sendProgress(`✅ جاهز — ${casesData.length.toLocaleString()} حالة، ${servicesData.length.toLocaleString()} خدمة (${totalTime}ث)`);
+
+  console.log(`\n✅ Total: ${casesData.length} cases, ${servicesData.length} services in ${totalTime}s`);
   if (casesData.length > 0) console.log('Cases columns:', Object.keys(casesData[0]).join(', '));
   if (servicesData.length > 0) console.log('Services columns:', Object.keys(servicesData[0]).join(', '));
 
@@ -175,14 +208,20 @@ ipcMain.handle('load-data', async () => {
     // Try cache first
     const cached = getCachedData();
     if (cached) {
-      console.log(`✅ Loaded from cache: ${cached.cases.length} cases, ${cached.services.length} services`);
-      return { cases: cached.cases, services: cached.services, error: null, fromCache: true };
+      const needsRefresh = cached.ageHours > CACHE_MAX_AGE_HOURS;
+      if (needsRefresh) {
+        console.log(`⏳ Cache is old (${Math.round(cached.ageHours)}h), returning it but signaling UI to refresh in background.`);
+      } else {
+        console.log(`✅ Loaded from cache: ${cached.cases.length} cases.`);
+      }
+      return { cases: cached.cases, services: cached.services, error: null, fromCache: true, needsRefresh };
     }
 
     // Download fresh
+    console.log('🚨 No cache found. Downloading fresh data blocking UI...');
     const data = await downloadFreshData();
     saveCacheData(data);
-    return { cases: data.cases, services: data.services, error: null, fromCache: false };
+    return { cases: data.cases, services: data.services, error: null, fromCache: false, needsRefresh: false };
   } catch (err) {
     console.error('❌ Error loading data:', err.message);
     // Try stale cache as last resort

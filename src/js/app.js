@@ -50,6 +50,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   const dateStr = now.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
   document.getElementById('currentDate').textContent = dateStr;
 
+  // Listen for live progress updates from main process
+  if (window.electronAPI?.onProgress) {
+    window.electronAPI.onProgress((msg) => {
+      const progressEl = document.getElementById('loadingProgress');
+      const statusEl = document.getElementById('statusText');
+      if (progressEl) progressEl.textContent = msg;
+      if (statusEl) statusEl.textContent = msg;
+    });
+  }
+
   // Enter key triggers search in filters
   document.querySelectorAll('.field-input, .sub-input').forEach(el => {
     el.addEventListener('keypress', e => { if (e.key === 'Enter') doSearch(); });
@@ -164,6 +174,12 @@ async function loadAllData() {
     // Setup auto-refresh timer
     startAutoRefresh();
 
+    // Trigger silent background refresh if cache is stale
+    if (result.needsRefresh) {
+      console.log('🔄 Data is stale, starting background refresh...');
+      refreshDataSilent();
+    }
+
   } catch (err) {
     console.error('❌ Error:', err);
     document.getElementById('statusText').textContent = 'خطأ في التحميل';
@@ -220,6 +236,49 @@ async function refreshData() {
     document.getElementById('statusText').textContent = 'خطأ في التحديث';
   } finally {
     overlay.classList.add('hidden');
+  }
+}
+
+async function refreshDataSilent() {
+  document.getElementById('statusText').textContent = 'جارٍ تحديث البيانات في الخلفية... ⏳';
+  const progressEl = document.getElementById('loadingProgress');
+  const prevText = progressEl ? progressEl.textContent : '';
+  if (progressEl) progressEl.textContent = 'تحديث الخلفية قيد التشغيل...';
+  
+  try {
+    const result = await window.electronAPI.refreshData();
+    if (result.error) {
+      document.getElementById('statusText').textContent = `خطأ تحديث صامت: ${result.error}`;
+      return;
+    }
+    casesData = result.cases || [];
+    servicesData = result.services || [];
+
+    // Clear existing filter options
+    const selects = ['filterNationality', 'filterAsylum', 'dashNationality', 'dashAsylum', 'dashService'];
+    selects.forEach(id => {
+      const el = document.getElementById(id);
+      while (el.options.length > 1) el.remove(1);
+    });
+    const timelineYears = document.getElementById('timelineYears');
+    const allBtn = timelineYears.querySelector('.yr-all');
+    timelineYears.innerHTML = '';
+    if (allBtn) timelineYears.appendChild(allBtn);
+
+    populateFilters();
+    populateYearTimeline();
+    
+    // Retain current visual state by re-triggering search
+    doSearch();
+    applyDashboardFilters();
+
+    const loadTime = new Date().toLocaleTimeString('ar-EG');
+    document.getElementById('statusText').textContent = `✅ تم التحديث الصامت — ${casesData.length.toLocaleString('ar-EG')} سجل (${loadTime})`;
+  } catch (err) {
+    console.error('❌ Silent refresh error:', err);
+    document.getElementById('statusText').textContent = 'فشل التحديث في الخلفية';
+  } finally {
+    if (progressEl) progressEl.textContent = prevText;
   }
 }
 

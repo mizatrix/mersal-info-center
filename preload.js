@@ -7,4 +7,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   loadData: () => ipcRenderer.invoke('load-data'),
   refreshData: () => ipcRenderer.invoke('refresh-data'),
   exportExcel: (data) => ipcRenderer.invoke('export-excel', data),
+  onProgress: (callback) => ipcRenderer.on('download-progress', (_event, msg) => callback(msg)),
 });

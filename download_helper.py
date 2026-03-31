@@ -5,7 +5,7 @@ import os
 
 def download(url, output_path):
     try:
-        r = requests.get(url, allow_redirects=True, timeout=60)
+        r = requests.get(url, allow_redirects=True, timeout=180)
         r.raise_for_status()
         with open(output_path, 'wb') as f:
             f.write(r.content)
