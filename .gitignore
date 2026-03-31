@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+
+# Build output
+build/
+dist/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# IDE
+.vscode/
+.idea/
+
+# Cache
+*.log
+
+# Python
+__pycache__/
+*.pyc
+
+# Temporary files
+*.tmp
+
+# PDF/HTML generated files (keep only source)
+implementation_plan_ar.html
+implementation_plan_ar.pdf
+implementation_plan_en.html
+implementation_plan_en.pdf
+
+# Old system reference files
+new system files/
+
+# Package lock (optional — remove this line if you want exact reproducibility)
+# package-lock.json
