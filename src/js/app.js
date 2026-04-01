@@ -11,9 +11,16 @@ let sortCol = null;
 let sortDir = 'asc';
 let selectedYear = 'all';
 let currentUserEmail = '';
-let autoRefreshTimer = null;
 const PAGE_SIZE = 50;
-const AUTO_REFRESH_MINUTES = 30;
+
+// قائمة الإيميلات المصرح لها بالدخول
+const ALLOWED_EMAILS = [
+  'admin@mersal.org',
+  'demo@mersal.org',
+  'moataz@mersal.org',
+  'alaa@mersal.org',
+  'nour@mersal.org'
+];
 
 // ── Nationality Locations (for map) ──
 const NAT_LOCATIONS = {
@@ -102,6 +109,13 @@ async function handleLogin() {
     return;
   }
 
+  // التحقق من قائمة الإيميلات المسموحة
+  if (!ALLOWED_EMAILS.includes(email)) {
+    errorEl.textContent = 'هذا البريد غير مصرح له بالدخول';
+    emailInput.classList.add('input-error');
+    return;
+  }
+
   errorEl.textContent = '';
   emailInput.classList.remove('input-error');
 
@@ -161,6 +175,19 @@ async function loadAllData() {
 
     // Initial display
     filteredData = [...casesData];
+    filteredData.sort((a, b) => { // Sort ascending by default
+      let va = a['C-Code'] ?? '';
+      let vb = b['C-Code'] ?? '';
+      return va.localeCompare(vb, 'ar', { numeric: true });
+    });
+    
+    // Sort UI state
+    sortCol = 'C-Code';
+    sortDir = 'asc';
+    document.querySelectorAll('th.sortable').forEach(th => {
+      if (th.dataset.col === 'C-Code') th.classList.add('sort-asc');
+    });
+
     renderTable();
     updateSearchStats();
 
@@ -170,15 +197,6 @@ async function loadAllData() {
     const loadTime = new Date().toLocaleTimeString('ar-EG');
     const cacheNote = result.fromCache ? ' ⚡' : '';
     document.getElementById('statusText').textContent = `جاهز — ${casesData.length.toLocaleString('ar-EG')} سجل ${source} (${loadTime})${cacheNote}`;
-
-    // Setup auto-refresh timer
-    startAutoRefresh();
-
-    // Trigger silent background refresh if cache is stale
-    if (result.needsRefresh) {
-      console.log('🔄 Data is stale, starting background refresh...');
-      refreshDataSilent();
-    }
 
   } catch (err) {
     console.error('❌ Error:', err);
@@ -224,7 +242,14 @@ async function refreshData() {
 
     populateFilters();
     populateYearTimeline();
+    
     filteredData = [...casesData];
+    filteredData.sort((a, b) => {
+      let va = a['C-Code'] ?? '';
+      let vb = b['C-Code'] ?? '';
+      return va.localeCompare(vb, 'ar', { numeric: true });
+    });
+
     renderTable();
     updateSearchStats();
     initDashboard();
@@ -237,59 +262,6 @@ async function refreshData() {
   } finally {
     overlay.classList.add('hidden');
   }
-}
-
-async function refreshDataSilent() {
-  document.getElementById('statusText').textContent = 'جارٍ تحديث البيانات في الخلفية... ⏳';
-  const progressEl = document.getElementById('loadingProgress');
-  const prevText = progressEl ? progressEl.textContent : '';
-  if (progressEl) progressEl.textContent = 'تحديث الخلفية قيد التشغيل...';
-  
-  try {
-    const result = await window.electronAPI.refreshData();
-    if (result.error) {
-      document.getElementById('statusText').textContent = `خطأ تحديث صامت: ${result.error}`;
-      return;
-    }
-    casesData = result.cases || [];
-    servicesData = result.services || [];
-
-    // Clear existing filter options
-    const selects = ['filterNationality', 'filterAsylum', 'dashNationality', 'dashAsylum', 'dashService'];
-    selects.forEach(id => {
-      const el = document.getElementById(id);
-      while (el.options.length > 1) el.remove(1);
-    });
-    const timelineYears = document.getElementById('timelineYears');
-    const allBtn = timelineYears.querySelector('.yr-all');
-    timelineYears.innerHTML = '';
-    if (allBtn) timelineYears.appendChild(allBtn);
-
-    populateFilters();
-    populateYearTimeline();
-    
-    // Retain current visual state by re-triggering search
-    doSearch();
-    applyDashboardFilters();
-
-    const loadTime = new Date().toLocaleTimeString('ar-EG');
-    document.getElementById('statusText').textContent = `✅ تم التحديث الصامت — ${casesData.length.toLocaleString('ar-EG')} سجل (${loadTime})`;
-  } catch (err) {
-    console.error('❌ Silent refresh error:', err);
-    document.getElementById('statusText').textContent = 'فشل التحديث في الخلفية';
-  } finally {
-    if (progressEl) progressEl.textContent = prevText;
-  }
-}
-
-function startAutoRefresh() {
-  if (autoRefreshTimer) clearInterval(autoRefreshTimer);
-  autoRefreshTimer = setInterval(async () => {
-    console.log('🔄 Auto-refreshing data...');
-    document.getElementById('statusText').textContent = 'تحديث تلقائي...';
-    await refreshData();
-  }, AUTO_REFRESH_MINUTES * 60 * 1000);
-  console.log(`⏰ Auto-refresh set to every ${AUTO_REFRESH_MINUTES} minutes`);
 }
 
 // ══════════════════════════════════════════════════
@@ -307,6 +279,8 @@ function populateFilters() {
 
   // Asylum statuses
   const asylums = [...new Set(casesData.map(r => String(r['موقف اللجوء'] || '').trim()).filter(Boolean))].sort();
+  if (!asylums.includes('مواطن')) asylums.push('مواطن'); // Explicitly add مواطن
+  
   const asylumSelect = document.getElementById('filterAsylum');
   const dashAsylumSelect = document.getElementById('dashAsylum');
   asylums.forEach(a => {
@@ -423,37 +397,42 @@ function clearFilters() {
 }
 
 // ══════════════════════════════════════════════════
-//  STATS CALCULATION (Port of backend.py:calculate_stats)
+//  STATS CALCULATION
 // ══════════════════════════════════════════════════
 function calculateStats(code) {
   code = String(code || '').trim();
 
+  // First identify the P-Codes of the matching cases
+  let targetCases = [];
   if (!code) {
-    // Global stats based on filtered data context
-    const yearFiltered = selectedYear === 'all' ? casesData : casesData.filter(r => String(r['Year'] || '').trim() === selectedYear);
-    const casesCount = yearFiltered.filter(r => String(r['P-Code'] || '').includes('-C-')).length;
-
-    const yearSvc = selectedYear === 'all' ? servicesData : servicesData;
-    const svcSum = yearSvc.reduce((s, r) => s + (parseFloat(r['عدد الخدمات']) || 0), 0);
-    const costSum = yearSvc.reduce((s, r) => s + (parseFloat(r['التكلفة']) || 0), 0);
-    return { cases: casesCount, services: Math.floor(svcSum), cost: costSum };
+    targetCases = filteredData;
+  } else {
+    const lc = code.toLowerCase();
+    targetCases = filteredData.filter(r =>
+      String(r['C-Code'] || '').toLowerCase().includes(lc) ||
+      String(r['P-Code'] || '').toLowerCase().includes(lc)
+    );
   }
 
-  // Per-code stats
-  const lc = code.toLowerCase();
-  const codeCases = casesData.filter(r =>
-    String(r['C-Code'] || '').toLowerCase().includes(lc) ||
-    String(r['P-Code'] || '').toLowerCase().includes(lc)
-  );
-  const casesCount = codeCases.filter(r => String(r['P-Code'] || '').includes('-C-')).length;
+  // Count exactly how many unique case entries we have (families vs individuals)
+  const casesCount = targetCases.filter(r => String(r['P-Code'] || '').includes('-C-')).length;
 
-  const codeSvc = servicesData.filter(r =>
-    String(r['C-Code'] || '').toLowerCase().includes(lc) ||
-    String(r['P-Code'] || '').toLowerCase().includes(lc)
-  );
-  const svcSum = codeSvc.reduce((s, r) => s + (parseFloat(r['عدد الخدمات']) || 0), 0);
-  const costSum = codeSvc.reduce((s, r) => s + (parseFloat(r['التكلفة']) || 0), 0);
+  // Now identify which services match these cases
+  // We extract a set of C-Codes and P-Codes from targetCases to filter services
+  const targetCCodes = new Set(targetCases.map(r => r['C-Code']?.trim()).filter(Boolean));
+  const targetPCodes = new Set(targetCases.map(r => r['P-Code']?.trim()).filter(Boolean));
 
+  // The services must match the currently filtered year/asylum/nationality implicitly because the cases were filtered!
+  // Wait, if a case matches, all its services are counted.
+  let matchedServices = servicesData.filter(svc => {
+    const c = svc['C-Code']?.trim() || '';
+    const p = svc['P-Code']?.trim() || '';
+    return targetCCodes.has(c) || targetPCodes.has(p);
+  });
+
+  const svcSum = matchedServices.reduce((s, r) => s + (parseFloat(r['عدد الخدمات']) || 0), 0);
+  const costSum = matchedServices.reduce((s, r) => s + (parseFloat(r['التكلفة']) || 0), 0);
+  
   return { cases: casesCount, services: Math.floor(svcSum), cost: costSum };
 }
 
@@ -766,13 +745,13 @@ function updateMap(data) {
   const counts = {};
   data.forEach(r => {
     const nat = String(r['الجنسية'] || '').trim();
-    if (nat) counts[nat] = (counts[nat] || 0) + 1;
+    if (nat && NAT_LOCATIONS[nat]) counts[nat] = (counts[nat] || 0) + 1; // Strict match
   });
 
   const maxCount = Math.max(...Object.values(counts), 1);
 
   for (const [nat, count] of Object.entries(counts)) {
-    const loc = NAT_LOCATIONS[nat] || { lat: 30.05 + Math.random() * 2, lng: 31.24 + Math.random() * 2, name: nat };
+    const loc = NAT_LOCATIONS[nat]; // Safe to access since we filtered above
     const ratio = count / maxCount;
     const size = 16 + ratio * 30;
 
@@ -995,5 +974,119 @@ function updateYearlyChart(data) {
       },
     },
   });
+}
+
+// ══════════════════════════════════════════════════
+//  TAB: PROFILE (التفاصيل الشاملة)
+// ══════════════════════════════════════════════════
+
+document.getElementById('profileSearchInput')?.addEventListener('keypress', function (e) {
+  if (e.key === 'Enter') searchProfile();
+});
+
+async function searchProfile() {
+  const input = document.getElementById('profileSearchInput');
+  const code = input.value.trim();
+  
+  if (!code) return;
+
+  document.getElementById('profileEmptyState').style.display = 'none';
+  document.getElementById('profileResults').style.display = 'none';
+  document.getElementById('profileLoadingState').style.display = 'block';
+
+  try {
+    const result = await window.electronAPI.getPatientDetails(code);
+
+    document.getElementById('profileLoadingState').style.display = 'none';
+
+    if (result.error || !result.cases || result.cases.length === 0) {
+      document.getElementById('profileEmptyState').style.display = 'block';
+      document.getElementById('profileEmptyState').querySelector('h3').textContent = 'لم يتم العثور على أي حالة بهذا الكود';
+      return;
+    }
+
+    const patient = result.cases[0];
+
+    // Populate Header
+    document.getElementById('profName').textContent = patient['Name'] || 'غير معروف';
+    document.getElementById('profNat').textContent = patient['الجنسية'] || 'غير مسجل';
+    document.getElementById('profAge').textContent = patient['Age'] || '0';
+    document.getElementById('profAsylum').textContent = patient['موقف اللجوء'] || 'غير مسجل';
+    document.getElementById('profCCode').textContent = patient['C-Code'] || '-';
+    document.getElementById('profPCode').textContent = patient['P-Code'] || '-';
+
+    // Helper function to render a list of items using dynamic JSON key spotting
+    const renderList = (containerId, items, keyFilters) => {
+      const container = document.getElementById(containerId);
+      container.innerHTML = '';
+      if (!items || items.length === 0) {
+        container.innerHTML = '<div class="prof-empty">لا يوجد بيانات مسجلة</div>';
+        return;
+      }
+
+      items.forEach(item => {
+        let titleVal = '';
+        let subtitleVal = '';
+        const data = item.data || item; // raw object from sqlite detail row OR service row
+        
+        // Find suitable key for title (disease name, decision name, etc.)
+        for (const k of Object.keys(data)) {
+          if (k.toLowerCase().includes('c-code') || k.toLowerCase().includes('c code') || k.toLowerCase().includes('p-code')) continue;
+          
+          const text = String(data[k]).trim();
+          if (!text) continue;
+
+          if (keyFilters.some(f => k.includes(f))) {
+            if (!titleVal) titleVal = `<span class="badge bg-primary me-2">${k}</span> ${text}`;
+            else {
+              // Try to map to subtitle instead of dumping in title
+              subtitleVal += `<div class="prof-kv"><span>${k}</span> <span>${text}</span></div>`;
+            }
+          }
+        }
+        
+        // If we didn't find anything from keyFilters, just dump everything nicely
+        if (!titleVal) {
+          const keys = Object.keys(data).filter(k => 
+            !k.toLowerCase().includes('c-code') && !k.toLowerCase().includes('c code') && !k.toLowerCase().includes('p-code') && String(data[k]).trim() !== ''
+          );
+          
+          if (keys.length > 0) {
+            titleVal = data[keys[0]];
+            keys.slice(1).forEach(k => {
+              subtitleVal += `<div class="prof-kv"><span>${k}</span> <span>${data[k]}</span></div>`;
+            });
+          }
+        }
+
+        const div = document.createElement('div');
+        div.className = 'prof-item';
+        div.innerHTML = `<div style="color:var(--text-primary); margin-bottom: ${subtitleVal ? '8px': '0'}; font-weight: bold; font-size: 1.05rem;">${titleVal||'بيان مسجل'}</div>
+                         ${subtitleVal}`;
+        container.appendChild(div);
+      });
+    };
+
+    // Filter details by type
+    const details = result.details || [];
+    const diseases = details.filter(d => d.type === 'disease');
+    const decisions = details.filter(d => d.type === 'decision');
+    const researches = details.filter(d => d.type === 'research' || d.type === 'classification');
+    const budgets = details.filter(d => d.type === 'budget');
+
+    // Render Lists using smart key detection
+    renderList('profDiseases', diseases, ['مرض', 'أمراض', 'disease', 'تشخيص', 'المرض']);
+    renderList('profDecisions', decisions, ['قرار', 'القرار', 'تاريخ', 'لجنة', 'النوع', 'تصنيف', 'أطباء']);
+    renderList('profResearch', researches, ['تصنيف', 'بحث', 'تاريخ', 'حالة البحث', 'class', 'موقف', 'نتيجة']);
+    renderList('profBudget', budgets, ['مبلغ', 'صرف', 'دخل', 'ميزانية', 'نوع', 'جهة', 'قيمة', 'تاريخ']);
+
+    // Show results
+    document.getElementById('profileResults').style.display = 'block';
+
+  } catch (err) {
+    console.error(err);
+    document.getElementById('profileLoadingState').style.display = 'none';
+    document.getElementById('profileEmptyState').style.display = 'block';
+  }
 }
 

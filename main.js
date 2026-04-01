@@ -60,11 +60,22 @@ function getDatabase() {
       value TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS details (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      c_code TEXT,
+      p_code TEXT,
+      record_type TEXT,
+      record_data TEXT
+    );
+
     CREATE INDEX IF NOT EXISTS idx_cases_ccode ON cases(c_code);
     CREATE INDEX IF NOT EXISTS idx_cases_pcode ON cases(p_code);
     CREATE INDEX IF NOT EXISTS idx_cases_name ON cases(name);
     CREATE INDEX IF NOT EXISTS idx_cases_nationality ON cases(nationality);
     CREATE INDEX IF NOT EXISTS idx_services_ccode ON services(c_code);
+    CREATE INDEX IF NOT EXISTS idx_details_ccode ON details(c_code);
+    CREATE INDEX IF NOT EXISTS idx_details_pcode ON details(p_code);
+    CREATE INDEX IF NOT EXISTS idx_details_type ON details(record_type);
   `);
 
   console.log(`🗄️ SQLite database ready at ${DB_PATH}`);
@@ -117,10 +128,6 @@ function getCachedData() {
 
     const lastSync = database.prepare("SELECT value FROM meta WHERE key = 'last_sync'").get();
     const syncTime = lastSync ? parseInt(lastSync.value) : 0;
-    const ageHours = (Date.now() - syncTime) / (1000 * 60 * 60);
-
-    console.log(`🗄️ Loading from SQLite (${Math.round(ageHours * 10) / 10}h old, ${casesCount} cases)...`);
-    const startMs = Date.now();
 
     const casesRows = database.prepare('SELECT * FROM cases').all();
     const servicesRows = database.prepare('SELECT * FROM services').all();
@@ -128,10 +135,7 @@ function getCachedData() {
     const cases = casesRows.map(r => dbRowToJsObject(r, CASES_REVERSE_MAP));
     const services = servicesRows.map(r => dbRowToJsObject(r, SERVICES_REVERSE_MAP));
 
-    const readMs = Date.now() - startMs;
-    console.log(`⚡ SQLite read: ${cases.length} cases + ${services.length} services in ${readMs}ms`);
-
-    return { cases, services, ageHours };
+    return { cases, services, ageHours: 0 };
   } catch (err) {
     console.warn('⚠️ SQLite read error:', err.message);
     return null;
@@ -153,10 +157,16 @@ function saveCacheData(data) {
       VALUES (@c_code, @p_code, @file_name, @services_count, @cost, @nationality, @asylum_status)
     `);
 
-    const bulkInsert = database.transaction((casesArr, servicesArr) => {
+    const insertDetail = database.prepare(`
+      INSERT INTO details (c_code, p_code, record_type, record_data)
+      VALUES (@c_code, @p_code, @type, @data)
+    `);
+
+    const bulkInsert = database.transaction((casesArr, servicesArr, detailsArr) => {
       // Clear existing data
       database.prepare('DELETE FROM cases').run();
       database.prepare('DELETE FROM services').run();
+      database.prepare('DELETE FROM details').run();
 
       // Insert cases
       for (const row of casesArr) {
@@ -176,13 +186,23 @@ function saveCacheData(data) {
         insertService.run(params);
       }
 
+      // Insert details
+      for (const row of (detailsArr || [])) {
+        insertDetail.run({
+          c_code: row.c_code || '',
+          p_code: row.p_code || '',
+          type: row.type || '',
+          data: JSON.stringify(row.data || {})
+        });
+      }
+
       // Update sync timestamp
       database.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('last_sync', ?)").run(String(Date.now()));
     });
 
-    bulkInsert(data.cases, data.services);
+    bulkInsert(data.cases, data.services, data.details);
     const writeMs = Date.now() - startMs;
-    console.log(`💾 SQLite write: ${data.cases.length} cases + ${data.services.length} services in ${writeMs}ms`);
+    console.log(`💾 SQLite write: ${data.cases.length} cases + ${data.services.length} services + ${(data.details||[]).length} details in ${writeMs}ms`);
   } catch (err) {
     console.warn('⚠️ SQLite write error:', err.message);
   }
@@ -212,139 +232,98 @@ function createWindow() {
   }
 }
 
-// ── Download file using Python (handles SharePoint auth redirects) ──
-function downloadFile(url, outputPath) {
-  return new Promise((resolve, reject) => {
-    const pythonScript = path.join(__dirname, 'download_helper.py');
-    const { spawn } = require('child_process');
-
-    const proc = spawn('python3', [pythonScript, url, outputPath], {
-      timeout: 300000,
-    });
-
-    let stderr = '';
-    proc.stderr.on('data', (data) => { stderr += data.toString(); });
-
-    proc.on('close', (code) => {
-      if (code === 0) {
-        const buffer = fs.readFileSync(outputPath);
-        fs.unlinkSync(outputPath); // cleanup
-        resolve(buffer);
-      } else {
-        reject(new Error(`Download failed (code ${code}): ${stderr.trim()}`));
-      }
-    });
-
-    proc.on('error', (err) => reject(err));
-  });
-}
-
-// ── Send progress updates to renderer ──
-function sendProgress(msg) {
-  console.log(`📡 ${msg}`);
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('download-progress', msg);
-  }
-}
-
-// ── Download and parse fresh data from OneDrive ──
-async function downloadFreshData() {
-  const CASES_URL = 'https://mersalcharity-my.sharepoint.com/:x:/g/personal/omar_abdallah_mersal-ngo_org1/IQAZAIJBc3rMR4MABivs_NY4AU9ZwCDrPRi6BkAVIcAzCsY?download=1';
-  const SERVICES_URL = 'https://mersalcharity-my.sharepoint.com/:x:/g/personal/omar_abdallah_mersal-ngo_org1/IQAJo7kuiuNzTYl7RkX1w_A6Ab45dnNs4ZUiC3o6WHnZD4U?download=1';
-
-  const CASES_SHEETS = ['all التكوين', 'تكوين كالك القديم'];
-  const SERVICES_SHEETS = ['2014-2024'];
-
-  // Columns we actually use (strip everything else to shrink cache)
-  const CASES_KEEP = ['C-Code', 'P-Code', 'Name', 'Age', 'Year', 'الجنسية', 'الرقم القومى', 'رقم كارت المفاوضية للفرد', 'رقم ملف المفاوضية', 'كود المفاوضية', 'موقف اللجوء'];
-  const SERVICES_KEEP = ['C-Code', 'P-Code', 'الملف', 'عدد الخدمات', 'التكلفة', 'الجنسية', 'موقف اللجوء'];
-
-  const tmpDir = os.tmpdir();
-
-  // ⚡ Download BOTH files in parallel (halves total time)
-  sendProgress('📥 جارٍ تحميل ملفي الحالات والخدمات معاً...');
-  const startTime = Date.now();
-
-  const [casesBuffer, svcBuffer] = await Promise.all([
-    downloadFile(CASES_URL, path.join(tmpDir, 'mersal_cases.xlsx')).then(buf => {
-      sendProgress('✅ تم تحميل ملف الحالات');
-      return buf;
-    }),
-    downloadFile(SERVICES_URL, path.join(tmpDir, 'mersal_services.xlsx')).then(buf => {
-      sendProgress('✅ تم تحميل ملف الخدمات');
-      return buf;
-    }),
-  ]);
-
-  const dlTime = ((Date.now() - startTime) / 1000).toFixed(1);
-  sendProgress(`⬇️ اكتمل التحميل في ${dlTime} ثانية — جارٍ قراءة Excel...`);
-
-  // Parse cases
-  const casesWb = XLSX.read(casesBuffer, { type: 'buffer' });
-  console.log('📋 Cases sheets:', casesWb.SheetNames.join(', '));
+// ── Parse Data from Local Folder ──
+async function parseLocalFolder(folderPath) {
+  const CASES_KEEP = ['C-Code', 'P-Code', 'Name', 'Age', 'Year', 'الجنسية', 'الرقم القومى', 'رقم كارت المفاوضية للفرد', 'رقم ملف المفاوضية', 'كود المفاوضية', 'موقف اللجوء', 'مواطن'];
+  const SERVICES_KEEP = ['C-Code', 'P-Code', 'الملف', 'الخدمة', 'الخدمات', 'نوع الخدمة', 'عدد الخدمات', 'التكلفة', 'الجنسية', 'موقف اللجوء'];
 
   let casesData = [];
-  for (const sheetName of CASES_SHEETS) {
-    if (casesWb.SheetNames.includes(sheetName)) {
-      const rows = XLSX.utils.sheet_to_json(casesWb.Sheets[sheetName], { defval: '' });
-      casesData = casesData.concat(rows);
-      console.log(`  ✅ Read ${rows.length} rows from "${sheetName}"`);
-    }
-  }
-  if (casesData.length === 0 && casesWb.SheetNames.length > 0) {
-    const firstSheet = casesWb.SheetNames[0];
-    casesData = XLSX.utils.sheet_to_json(casesWb.Sheets[firstSheet], { defval: '' });
-    console.log(`  ⚠️ Fallback to first sheet "${firstSheet}": ${casesData.length} rows`);
-  }
-
-  sendProgress(`📊 تمت قراءة ${casesData.length.toLocaleString()} حالة — جارٍ قراءة الخدمات...`);
-
-  // Strip unused columns from cases (massive cache savings)
-  casesData = casesData.map(row => {
-    const clean = {};
-    for (const key of CASES_KEEP) {
-      const val = row[key] ?? row[key.trim()] ?? '';
-      clean[key] = typeof val === 'string' ? val.trim() : val;
-    }
-    return clean;
-  });
-
-  // Parse services
-  const svcWb = XLSX.read(svcBuffer, { type: 'buffer' });
-  console.log('📋 Services sheets:', svcWb.SheetNames.join(', '));
-
   let servicesData = [];
-  for (const sheetName of SERVICES_SHEETS) {
-    if (svcWb.SheetNames.includes(sheetName)) {
-      const rows = XLSX.utils.sheet_to_json(svcWb.Sheets[sheetName], { defval: '' });
-      servicesData = servicesData.concat(rows);
-      console.log(`  ✅ Read ${rows.length} rows from "${sheetName}"`);
+  let detailsData = [];
+
+  const files = fs.readdirSync(folderPath);
+  for (const file of files) {
+    if (!file.match(/\.(xlsx|xls|xlsb)$/i)) continue;
+    if (file.startsWith('~$')) continue;
+
+    const fullPath = path.join(folderPath, file);
+    sendProgress(`📥 قراءة ملف: ${file}...`);
+    
+    try {
+      const buffer = fs.readFileSync(fullPath);
+      const wb = XLSX.read(buffer, { type: 'buffer' });
+      
+      let allRows = [];
+      for (const sheetName of wb.SheetNames) {
+        allRows = allRows.concat(XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' }));
+      }
+      if (allRows.length === 0) continue;
+
+      const lowerFile = file.toLowerCase();
+      // 1. Cases
+      if (lowerFile.includes('حالات') || lowerFile.includes('تكوين') || lowerFile.includes('cases')) {
+        casesData = casesData.concat(allRows.map(row => {
+          const clean = {};
+          for (const key of CASES_KEEP) {
+            const val = row[key] ?? row[key.trim()] ?? '';
+            clean[key] = typeof val === 'string' ? val.trim() : val;
+          }
+          return clean;
+        }));
+      }
+      // 2. Services
+      else if (lowerFile.includes('خدمات') || lowerFile.includes('services')) {
+        servicesData = servicesData.concat(allRows.map(row => {
+          const clean = {};
+          const serviceNameVariations = ['الملف', 'الخدمة', 'الخدمات', 'نوع الخدمة'];
+          let foundServiceName = '';
+          for (const k of serviceNameVariations) {
+            if ((row[k] || row[k.trim()]) !== undefined && (row[k] || row[k.trim()]) !== '') {
+              foundServiceName = String(row[k] ?? row[k.trim()]).trim();
+              break;
+            }
+          }
+          for (const key of SERVICES_KEEP) {
+            let val = row[key] ?? row[key.trim()] ?? '';
+            if (key === 'الملف' && val === '') val = foundServiceName;
+            clean[key] = typeof val === 'string' ? val.trim() : val;
+          }
+          return clean;
+        }));
+      }
+      // 3. Details (Research, Classification, Decisions, Diseases, Budget)
+      else {
+        let type = 'other';
+        if (lowerFile.includes('أبحاث') || lowerFile.includes('البحث') || lowerFile.includes('بحث') || lowerFile.includes('research')) type = 'research';
+        if (lowerFile.includes('تصنيف') || lowerFile.includes('classification')) type = 'classification';
+        if (lowerFile.includes('قرار') || lowerFile.includes('decisions')) type = 'decision';
+        if (lowerFile.includes('مرض') || lowerFile.includes('أمراض') || lowerFile.includes('امراض') || lowerFile.includes('diseases')) type = 'disease';
+        if (lowerFile.includes('الميزانية') || lowerFile.includes('ميزانية') || lowerFile.includes('صرف') || lowerFile.includes('دخل')) type = 'budget';
+
+        if (type !== 'other') {
+          for (const row of allRows) {
+            // Try to find C-Code or P-Code from any similar column names
+            let ccode = '';
+            let pcode = '';
+            for (const key of Object.keys(row)) {
+              const k = key.trim().toLowerCase();
+              if (k === 'c-code' || k === 'c code' || k === 'كود الحالة') ccode = String(row[key]||'').trim();
+              if (k === 'p-code' || k === 'p code' || k === 'كود الأسرة') pcode = String(row[key]||'').trim();
+            }
+            if (ccode || pcode) {
+              detailsData.push({ c_code: ccode, p_code: pcode, type: type, data: row });
+            }
+          }
+        }
+      }
+
+    } catch (e) {
+      console.warn(`Could not parse ${file}:`, e.message);
     }
   }
-  if (servicesData.length === 0 && svcWb.SheetNames.length > 0) {
-    const firstSheet = svcWb.SheetNames[0];
-    servicesData = XLSX.utils.sheet_to_json(svcWb.Sheets[firstSheet], { defval: '' });
-    console.log(`  ⚠️ Fallback to first sheet "${firstSheet}": ${servicesData.length} rows`);
-  }
 
-  // Strip unused columns from services
-  servicesData = servicesData.map(row => {
-    const clean = {};
-    for (const key of SERVICES_KEEP) {
-      const val = row[key] ?? row[key.trim()] ?? '';
-      clean[key] = typeof val === 'string' ? val.trim() : val;
-    }
-    return clean;
-  });
-
-  const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
-  sendProgress(`✅ جاهز — ${casesData.length.toLocaleString()} حالة، ${servicesData.length.toLocaleString()} خدمة (${totalTime}ث)`);
-
-  console.log(`\n✅ Total: ${casesData.length} cases, ${servicesData.length} services in ${totalTime}s`);
-  if (casesData.length > 0) console.log('Cases columns:', Object.keys(casesData[0]).join(', '));
-  if (servicesData.length > 0) console.log('Services columns:', Object.keys(servicesData[0]).join(', '));
-
-  return { cases: casesData, services: servicesData };
+  sendProgress(`✅ اكتملت قراءة ${casesData.length} حالات، ${servicesData.length} خدمات، و ${detailsData.length} تفاصيل إضافية.`);
+  return { cases: casesData, services: servicesData, details: detailsData };
 }
 
 // ── IPC: Load Data (with cache) ──
@@ -353,20 +332,13 @@ ipcMain.handle('load-data', async () => {
     // Try cache first
     const cached = getCachedData();
     if (cached) {
-      const needsRefresh = cached.ageHours > CACHE_MAX_AGE_HOURS;
-      if (needsRefresh) {
-        console.log(`⏳ Cache is old (${Math.round(cached.ageHours)}h), returning it but signaling UI to refresh in background.`);
-      } else {
-        console.log(`✅ Loaded from cache: ${cached.cases.length} cases.`);
-      }
-      return { cases: cached.cases, services: cached.services, error: null, fromCache: true, needsRefresh };
+      console.log(`✅ Loaded from cache: ${cached.cases.length} cases.`);
+      return { cases: cached.cases, services: cached.services, error: null, fromCache: true, needsRefresh: false };
     }
 
-    // Download fresh
-    console.log('🚨 No cache found. Downloading fresh data blocking UI...');
-    const data = await downloadFreshData();
-    saveCacheData(data);
-    return { cases: data.cases, services: data.services, error: null, fromCache: false, needsRefresh: false };
+    // No cache found -> Do NOT auto download, return nothing and let user refresh
+    console.log('🚨 No cache found. Returning empty to prompt user implementation...');
+    return { cases: [], services: [], error: null, fromCache: false, needsRefresh: false, missingData: true };
   } catch (err) {
     console.error('❌ Error loading data:', err.message);
     // Try stale DB as last resort (data may exist even if download fails)
@@ -386,15 +358,55 @@ ipcMain.handle('load-data', async () => {
   }
 });
 
-// ── IPC: Force Refresh (bypass cache) ──
-ipcMain.handle('refresh-data', async () => {
+// ── IPC: Force Refresh (Using Folder Picker) ──
+ipcMain.handle('refresh-data', async (event) => {
+  const { dialog } = require('electron');
   try {
-    const data = await downloadFreshData();
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'اختر المجلد (Folder) الذي يحتوي على جميع إكسيلات البيانات',
+      properties: ['openDirectory']
+    });
+    if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+       return { error: 'تم إلغاء اختيار المجلد' };
+    }
+
+    const folderPath = result.filePaths[0];
+    const data = await parseLocalFolder(folderPath);
     saveCacheData(data);
     return { cases: data.cases, services: data.services, error: null, fromCache: false };
   } catch (err) {
     console.error('❌ Error refreshing data:', err.message);
     return { cases: [], services: [], error: err.message };
+  }
+});
+
+// ── IPC: Get Patient Full Profile Details ──
+ipcMain.handle('get-patient-details', async (event, code) => {
+  try {
+    const database = getDatabase();
+    code = String(code).trim();
+    if (!code) throw new Error('لا يوجد كود');
+
+    // Fetch master cases
+    const cRows = database.prepare(`SELECT * FROM cases WHERE c_code LIKE ? OR p_code LIKE ? COLLATE NOCASE`).all('%'+code+'%', '%'+code+'%');
+    const cases = cRows.map(r => dbRowToJsObject(r, CASES_REVERSE_MAP));
+
+    // Fetch services
+    const sRows = database.prepare(`SELECT * FROM services WHERE c_code LIKE ? OR p_code LIKE ? COLLATE NOCASE`).all('%'+code+'%', '%'+code+'%');
+    const services = sRows.map(r => dbRowToJsObject(r, SERVICES_REVERSE_MAP));
+
+    // Fetch details
+    const dRows = database.prepare(`SELECT * FROM details WHERE c_code LIKE ? OR p_code LIKE ? COLLATE NOCASE`).all('%'+code+'%', '%'+code+'%');
+    const details = dRows.map(r => ({
+      c_code: r.c_code,
+      p_code: r.p_code,
+      type: r.record_type,
+      data: JSON.parse(r.record_data || '{}')
+    }));
+
+    return { cases, services, details, error: null };
+  } catch (err) {
+    return { error: err.message };
   }
 });
 

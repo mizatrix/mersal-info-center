@@ -83,6 +83,16 @@
             <span class="nav-desc">إحصائيات ورسوم بيانية</span>
           </div>
         </button>
+        </button>
+        <button class="nav-item" data-tab="profile" onclick="switchTab('profile')">
+          <div class="nav-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </div>
+          <div class="nav-text">
+            <span class="nav-label">ملف الحالة</span>
+            <span class="nav-desc">أبحاث و تفاصيل شاملة</span>
+          </div>
+        </button>
       </div>
     </div>
 
@@ -473,6 +483,140 @@
           <div class="chart-body"><canvas id="yearlyChart"></canvas></div>
         </div>
       </div>
+    </div>
+
+    <!-- ═══════════ TAB: PROFILE ═══════════ -->
+    <div class="tab-content" id="tab-profile">
+      <!-- Search Header -->
+      <div class="stat-cards" style="grid-template-columns: 1fr;">
+        <div class="stat-card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; background: var(--surface-light); border: 1px solid var(--border-color); border-radius: var(--radius-lg);">
+          <h2 style="margin-bottom: 1rem; color: var(--text-primary);"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary-color)" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> الاستعلام عن تفاصيل حالة</h2>
+          <div style="width: 100%; max-width: 600px; display: flex; gap: 10px;">
+            <input type="text" id="profileSearchInput" placeholder="أدخل كود الحالة (C-Code أو P-Code)..." style="flex: 1; padding: 12px 20px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-primary); font-family: inherit; font-size: 1rem;" autocomplete="off" />
+            <button onclick="searchProfile()" style="padding: 0 24px; border-radius: 8px; background: var(--primary-color); color: white; border: none; font-weight: 600; cursor: pointer;">بحث</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      <div id="profileEmptyState" style="text-align: center; padding: 4rem 2rem; color: var(--text-secondary);">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity: 0.5; margin-bottom: 1rem;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <h3 style="font-weight: 500;">أدخل كود الحالة للبحث</h3>
+        <p>قم بالبحث بواسطة C-Code أو P-Code لعرض الأبحاث، التصنيفات، القرارات، الأمراض، والميزانية.</p>
+      </div>
+
+      <!-- Loading State -->
+      <div id="profileLoadingState" style="text-align: center; padding: 4rem 2rem; color: var(--text-secondary); display: none;">
+        <div class="loading-spinner" style="border-width: 3px; width: 40px; height: 40px; border-top-color: var(--primary-color); margin: 0 auto 1rem;"></div>
+        <p>جاري البحث عن التفاصيل...</p>
+      </div>
+
+      <!-- Results Grid -->
+      <div id="profileResults" style="display: none; padding-bottom: 4rem;">
+        
+        <!-- Profile Main Info -->
+        <div style="background: var(--surface-light); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.5rem; margin-top: 1.5rem; display: flex; align-items: center; gap: 1.5rem; border-right: 4px solid var(--primary-color);">
+          <div style="width: 60px; height: 60px; border-radius: 50%; background: rgba(30, 215, 96, 0.1); display: flex; align-items: center; justify-content: center; color: var(--primary-color);">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </div>
+          <div style="flex: 1;">
+            <h3 id="profName" style="color: var(--text-primary); margin: 0 0 5px 0; font-size: 1.2rem;">اسم الحالة</h3>
+            <div style="color: var(--text-secondary); display: flex; gap: 1.5rem; font-size: 0.9rem;">
+              <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-inline-end: 4px; vertical-align: text-bottom;"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg><span id="profNat">-</span></span>
+              <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-inline-end: 4px; vertical-align: text-bottom;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span id="profAge">-</span> سنة</span>
+              <span style="background: var(--surface-dark); padding: 2px 8px; border-radius: 4px; color: var(--text-secondary); font-size: 0.8rem;" id="profAsylum">-</span>
+            </div>
+          </div>
+          <div style="text-align: end;">
+            <div style="font-weight: bold; color: var(--text-primary); font-size: 1.1rem; margin-bottom: 2px;" id="profCCode">C-Code</div>
+            <div style="color: var(--text-secondary); font-size: 0.85rem;" id="profPCode">P-Code</div>
+          </div>
+        </div>
+
+        <style>
+          .prof-card {
+            background: var(--surface-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            max-height: 400px;
+          }
+          .prof-card h4 {
+            color: var(--text-primary);
+            font-size: 1.05rem;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.8rem;
+          }
+          .prof-list {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+            padding-right: 5px;
+          }
+          .prof-list::-webkit-scrollbar { width: 6px; }
+          .prof-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+          .prof-item {
+            background: var(--surface-dark);
+            border-radius: 6px;
+            padding: 0.8rem 1rem;
+            border-right: 3px solid rgba(255,255,255,0.1);
+          }
+          .prof-kv {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 4px;
+            font-size: 0.85rem;
+          }
+          .prof-kv span:first-child { color: var(--text-secondary); min-width: 80px;}
+          .prof-kv span:last-child { color: var(--text-primary); text-align: left; }
+          .prof-empty {
+            text-align: center;
+            padding: 2rem 0;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+          }
+        </style>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
+          
+          <!-- الأمراض -->
+          <div class="prof-card">
+            <h4><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f44336" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> الأمراض</h4>
+            <div id="profDiseases" class="prof-list"></div>
+          </div>
+          
+          <!-- القرارات -->
+          <div class="prof-card">
+            <h4><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff9800" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg> القرارات</h4>
+            <div id="profDecisions" class="prof-list"></div>
+          </div>
+          
+          <!-- الأبحاث والتصنيف -->
+          <div class="prof-card" style="grid-column: 1 / -1;">
+            <h4><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2196f3" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> ملخص الأبحاث والتصنيفات</h4>
+            <div id="profResearch" class="prof-list" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;"></div>
+          </div>
+
+          <!-- ميزانية الأسرة -->
+          <div class="prof-card" style="grid-column: 1 / -1;">
+            <h4><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4caf50" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> ميزانية الأسرة (الدخل والصرف)</h4>
+            <div id="profBudget" class="prof-list" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;"></div>
+          </div>
+
+        </div>
+
+      </div>
+
     </div>
 
   </main>
