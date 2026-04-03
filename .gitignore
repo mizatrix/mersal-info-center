@@ -41,6 +41,7 @@ mersal_data/
 
 # Local databases and caches
 *.db
+!mersal.db
 .mersal-info-center/
 test-parse.js
 test_parse.js
