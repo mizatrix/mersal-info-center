@@ -24,6 +24,14 @@ function ensureDbDir() {
 function getDatabase() {
   if (db) return db;
   ensureDbDir();
+
+  // Auto-seed database from project workspace if missing in hone directory
+  const localDbPath = path.join(__dirname, 'mersal.db');
+  if (!fs.existsSync(DB_PATH) && fs.existsSync(localDbPath)) {
+    console.log('🔄 Auto-seeding mersal.db from project directory to home directory...');
+    fs.copyFileSync(localDbPath, DB_PATH);
+  }
+
   db = new Database(DB_PATH);
   db.pragma('journal_mode = WAL');   // Much faster for reads
   db.pragma('synchronous = NORMAL'); // Safe enough, faster than FULL
