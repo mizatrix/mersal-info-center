@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   مركز معلومات مرسال — Main Application Logic
+   مركز معلومات مرسال — Main Application Logic v3.1
    ═══════════════════════════════════════════════════════════ */
 
 // ── State ──
@@ -11,6 +11,7 @@ let sortCol = null;
 let sortDir = 'asc';
 let selectedYear = 'all';
 let currentUserEmail = '';
+let currentSelectedCode = ''; // For modal
 const PAGE_SIZE = 50;
 
 // قائمة الإيميلات المصرح لها بالدخول
@@ -22,41 +23,62 @@ const ALLOWED_EMAILS = [
   'nour@mersal.org'
 ];
 
-// ── Nationality Locations (for map) ──
-const NAT_LOCATIONS = {
-  'مصري': { lat: 26.8, lng: 30.8, name: 'مصر' },
-  'مصرى': { lat: 26.8, lng: 30.8, name: 'مصر' },
-  'سوداني': { lat: 15.6, lng: 32.5, name: 'السودان' },
-  'سودانى': { lat: 15.6, lng: 32.5, name: 'السودان' },
-  'سورى': { lat: 34.8, lng: 38.9, name: 'سوريا' },
-  'سوري': { lat: 34.8, lng: 38.9, name: 'سوريا' },
-  'اردني': { lat: 31.95, lng: 35.91, name: 'الأردن' },
-  'اردنى': { lat: 31.95, lng: 35.91, name: 'الأردن' },
-  'أثيوبي': { lat: 9.1, lng: 40.5, name: 'إثيوبيا' },
-  'أثيوبى': { lat: 9.1, lng: 40.5, name: 'إثيوبيا' },
-  'إريتري': { lat: 15.3, lng: 39.7, name: 'إريتريا' },
-  'إريترى': { lat: 15.3, lng: 39.7, name: 'إريتريا' },
-  'يمني': { lat: 15.5, lng: 48.5, name: 'اليمن' },
-  'يمنى': { lat: 15.5, lng: 48.5, name: 'اليمن' },
-  'صومالي': { lat: 5.15, lng: 46.2, name: 'الصومال' },
-  'صومالى': { lat: 5.15, lng: 46.2, name: 'الصومال' },
-  'عراقي': { lat: 33.2, lng: 43.7, name: 'العراق' },
-  'عراقى': { lat: 33.2, lng: 43.7, name: 'العراق' },
-  'ليبي': { lat: 26.3, lng: 17.2, name: 'ليبيا' },
-  'ليبى': { lat: 26.3, lng: 17.2, name: 'ليبيا' },
-  'فلسطيني': { lat: 31.95, lng: 35.2, name: 'فلسطين' },
-  'فلسطينى': { lat: 31.95, lng: 35.2, name: 'فلسطين' },
+// ── Egyptian Governorate Locations (for map) ──
+const GOV_LOCATIONS = {
+  'القاهرة': { lat: 30.04, lng: 31.24 },
+  'الجيزة': { lat: 30.01, lng: 31.21 },
+  'الإسكندرية': { lat: 31.20, lng: 29.92 },
+  'الاسكندرية': { lat: 31.20, lng: 29.92 },
+  'الدقهلية': { lat: 31.05, lng: 31.38 },
+  'دقهلية': { lat: 31.05, lng: 31.38 },
+  'الشرقية': { lat: 30.55, lng: 31.70 },
+  'شرقية': { lat: 30.55, lng: 31.70 },
+  'القليوبية': { lat: 30.33, lng: 31.24 },
+  'قليوبية': { lat: 30.33, lng: 31.24 },
+  'كفر الشيخ': { lat: 31.34, lng: 30.94 },
+  'الغربية': { lat: 30.87, lng: 31.03 },
+  'غربية': { lat: 30.87, lng: 31.03 },
+  'المنوفية': { lat: 30.52, lng: 30.99 },
+  'منوفية': { lat: 30.52, lng: 30.99 },
+  'البحيرة': { lat: 30.84, lng: 30.34 },
+  'بحيرة': { lat: 30.84, lng: 30.34 },
+  'الإسماعيلية': { lat: 30.60, lng: 32.27 },
+  'الاسماعيلية': { lat: 30.60, lng: 32.27 },
+  'السويس': { lat: 29.97, lng: 32.55 },
+  'سويس': { lat: 29.97, lng: 32.55 },
+  'بورسعيد': { lat: 31.27, lng: 32.30 },
+  'دمياط': { lat: 31.42, lng: 31.82 },
+  'الفيوم': { lat: 29.30, lng: 30.84 },
+  'فيوم': { lat: 29.30, lng: 30.84 },
+  'بني سويف': { lat: 29.07, lng: 31.10 },
+  'المنيا': { lat: 28.08, lng: 30.75 },
+  'منيا': { lat: 28.08, lng: 30.75 },
+  'أسيوط': { lat: 27.18, lng: 31.17 },
+  'اسيوط': { lat: 27.18, lng: 31.17 },
+  'سوهاج': { lat: 26.56, lng: 31.69 },
+  'قنا': { lat: 26.16, lng: 32.72 },
+  'الأقصر': { lat: 25.69, lng: 32.64 },
+  'اقصر': { lat: 25.69, lng: 32.64 },
+  'الاقصر': { lat: 25.69, lng: 32.64 },
+  'أسوان': { lat: 24.09, lng: 32.90 },
+  'اسوان': { lat: 24.09, lng: 32.90 },
+  'البحر الأحمر': { lat: 25.07, lng: 33.82 },
+  'البحر الاحمر': { lat: 25.07, lng: 33.82 },
+  'الوادي الجديد': { lat: 25.44, lng: 30.55 },
+  'مطروح': { lat: 31.35, lng: 27.24 },
+  'مرسى مطروح': { lat: 31.35, lng: 27.24 },
+  'شمال سيناء': { lat: 31.07, lng: 33.83 },
+  'جنوب سيناء': { lat: 28.50, lng: 33.97 },
+  '6 أكتوبر': { lat: 29.96, lng: 30.93 },
+  'السادس من أكتوبر': { lat: 29.96, lng: 30.93 },
+  'حلوان': { lat: 29.84, lng: 31.30 },
+  'العاشر من رمضان': { lat: 30.30, lng: 31.75 },
 };
 
 // ══════════════════════════════════════════════════
 //  INITIALIZATION
 // ══════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', async () => {
-  // Set current date
-  const now = new Date();
-  const dateStr = now.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
-  document.getElementById('currentDate').textContent = dateStr;
-
   // Listen for live progress updates from main process
   if (window.electronAPI?.onProgress) {
     window.electronAPI.onProgress((msg) => {
@@ -78,6 +100,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     loginInput.addEventListener('keypress', e => { if (e.key === 'Enter') handleLogin(); });
   }
 
+  // Always show filter sidebar on startup
+  localStorage.removeItem('mersal_filter_collapsed');
+  document.getElementById('filterSidebar')?.classList.remove('collapsed');
+  document.querySelector('.search-layout')?.classList.remove('sidebar-collapsed');
+  const togBtn = document.getElementById('filterToggleBtn');
+  if (togBtn) togBtn.classList.remove('flipped');
+
+  // Close modals on Escape key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeCaseModal();
+      closeFrameworkModal();
+    }
+  });
+
   // Check if user already logged in
   const savedEmail = localStorage.getItem('mersal_user_email');
   if (savedEmail) {
@@ -85,7 +122,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     showApp();
     await loadAllData();
   }
-  // Otherwise, login overlay is visible and waits for email input
 });
 
 // ══════════════════════════════════════════════════
@@ -96,7 +132,6 @@ async function handleLogin() {
   const errorEl = document.getElementById('loginError');
   const email = emailInput.value.trim().toLowerCase();
 
-  // Basic validation
   if (!email) {
     errorEl.textContent = 'الرجاء إدخال البريد الإلكتروني';
     emailInput.classList.add('input-error');
@@ -109,7 +144,6 @@ async function handleLogin() {
     return;
   }
 
-  // التحقق من قائمة الإيميلات المسموحة
   if (!ALLOWED_EMAILS.includes(email)) {
     errorEl.textContent = 'هذا البريد غير مصرح له بالدخول';
     emailInput.classList.add('input-error');
@@ -119,7 +153,6 @@ async function handleLogin() {
   errorEl.textContent = '';
   emailInput.classList.remove('input-error');
 
-  // Save email and proceed
   currentUserEmail = email;
   localStorage.setItem('mersal_user_email', email);
 
@@ -128,16 +161,13 @@ async function handleLogin() {
 }
 
 function showApp() {
-  // Hide login overlay
   const loginOverlay = document.getElementById('loginOverlay');
   if (loginOverlay) loginOverlay.classList.add('hidden');
 
-  // Update sidebar user info
   document.getElementById('userEmail').textContent = currentUserEmail;
   const initials = currentUserEmail.split('@')[0].substring(0, 2).toUpperCase();
   document.getElementById('userAvatar').textContent = initials;
 
-  // Show app
   document.querySelector('.app-layout').style.opacity = '1';
 }
 
@@ -149,7 +179,7 @@ async function loadAllData() {
   overlay.classList.remove('hidden');
   document.getElementById('statusText').textContent = 'جارٍ التحميل...';
   const progressEl = document.getElementById('loadingProgress');
-  if (progressEl) progressEl.textContent = 'جارٍ تحميل ملفات Excel من OneDrive...';
+  if (progressEl) progressEl.textContent = 'جارٍ تحميل البيانات...';
 
   try {
     const result = await window.electronAPI.loadData();
@@ -162,26 +192,28 @@ async function loadAllData() {
     }
 
     casesData = result.cases || [];
-    servicesData = result.services || [];
+    // servicesData is no longer loaded globally to stay lightweight ⚡
+
+    // Update data version in header
+    if (result.dataVersion) {
+      document.getElementById('dataVersion').textContent = result.dataVersion;
+    }
 
     const source = result.fromCache ? '(من الذاكرة المحلية)' : '(من OneDrive)';
-    console.log(`✅ Loaded ${casesData.length} cases, ${servicesData.length} services ${source}`);
-    if (casesData.length > 0) console.log('Cases cols:', Object.keys(casesData[0]));
-    if (servicesData.length > 0) console.log('Services cols:', Object.keys(servicesData[0]));
+    console.log(`✅ Loaded ${casesData.length} cases ${source}`);
 
-    // Populate filters
-    populateFilters();
+    // Populate filters async
+    await populateFilters();
     populateYearTimeline();
 
     // Initial display
     filteredData = [...casesData];
-    filteredData.sort((a, b) => { // Sort ascending by default
+    filteredData.sort((a, b) => {
       let va = a['C-Code'] ?? '';
       let vb = b['C-Code'] ?? '';
       return va.localeCompare(vb, 'ar', { numeric: true });
     });
     
-    // Sort UI state
     sortCol = 'C-Code';
     sortDir = 'asc';
     document.querySelectorAll('th.sortable').forEach(th => {
@@ -210,23 +242,22 @@ async function loadAllData() {
 //  DATA REFRESH & AUTO-REFRESH
 // ══════════════════════════════════════════════════
 async function refreshData() {
-  // Clear existing filter options to avoid duplicates
+  // Clear existing filter options
   const selects = ['filterNationality', 'filterAsylum', 'dashNationality', 'dashAsylum', 'dashService'];
   selects.forEach(id => {
     const el = document.getElementById(id);
     while (el.options.length > 1) el.remove(1);
   });
 
-  // Clear year timeline (keep "All" button)
+  // Clear year timeline
   const timelineYears = document.getElementById('timelineYears');
   const allBtn = timelineYears.querySelector('.yr-all');
   timelineYears.innerHTML = '';
   if (allBtn) timelineYears.appendChild(allBtn);
 
-  // Force fresh download (bypass cache)
   const overlay = document.getElementById('loadingOverlay');
   overlay.classList.remove('hidden');
-  document.getElementById('statusText').textContent = 'جارٍ تحديث البيانات من OneDrive...';
+  document.getElementById('statusText').textContent = 'جارٍ تحديث البيانات...';
   const progressEl = document.getElementById('loadingProgress');
   if (progressEl) progressEl.textContent = 'جارٍ تحميل ملفات Excel الجديدة...';
 
@@ -238,9 +269,14 @@ async function refreshData() {
       return;
     }
     casesData = result.cases || [];
-    servicesData = result.services || [];
+    // servicesData removed from global scope
 
-    populateFilters();
+    // Update data version in header
+    if (result.dataVersion) {
+      document.getElementById('dataVersion').textContent = result.dataVersion;
+    }
+
+    await populateFilters();
     populateYearTimeline();
     
     filteredData = [...casesData];
@@ -267,7 +303,7 @@ async function refreshData() {
 // ══════════════════════════════════════════════════
 //  POPULATE FILTERS
 // ══════════════════════════════════════════════════
-function populateFilters() {
+async function populateFilters() {
   // Nationalities
   const nats = [...new Set(casesData.map(r => String(r['الجنسية'] || '').trim()).filter(Boolean))].sort();
   const natSelect = document.getElementById('filterNationality');
@@ -279,7 +315,7 @@ function populateFilters() {
 
   // Asylum statuses
   const asylums = [...new Set(casesData.map(r => String(r['موقف اللجوء'] || '').trim()).filter(Boolean))].sort();
-  if (!asylums.includes('مواطن')) asylums.push('مواطن'); // Explicitly add مواطن
+  if (!asylums.includes('مواطن')) asylums.push('مواطن');
   
   const asylumSelect = document.getElementById('filterAsylum');
   const dashAsylumSelect = document.getElementById('dashAsylum');
@@ -288,10 +324,16 @@ function populateFilters() {
     dashAsylumSelect.add(new Option(a, a));
   });
 
-  // Services (for dashboard)
-  const services = [...new Set(servicesData.map(r => String(r['الملف'] || '').trim()).filter(Boolean))].sort();
+  // Governorates
+  const govs = [...new Set(casesData.map(r => String(r['محافظة السكن الحالي'] || '').trim()).filter(Boolean))].sort();
+  const govSelect = document.getElementById('filterGovernorate');
+  govs.forEach(g => govSelect.add(new Option(g, g)));
+
+  // Services (for dashboard) — load distinct options blazingly fast using SQLite
+  const opts = await window.electronAPI.getFilterOptions();
+  const svcList = opts.specialties.length > 0 ? opts.specialties : opts.files;
   const svcSelect = document.getElementById('dashService');
-  services.forEach(s => svcSelect.add(new Option(s, s)));
+  svcList.forEach(s => svcSelect.add(new Option(s, s)));
 }
 
 function populateYearTimeline() {
@@ -311,26 +353,24 @@ function populateYearTimeline() {
 }
 
 // ══════════════════════════════════════════════════
-//  SEARCH & FILTER (Port of backend.py:search)
+//  SEARCH & FILTER
 // ══════════════════════════════════════════════════
 function doSearch() {
   const code = document.getElementById('filterCode').value.trim();
   const name = document.getElementById('filterName').value.trim();
   const individual = document.getElementById('filterIndividual').value.trim();
   const family = document.getElementById('filterFamily').value.trim();
-  const card = document.getElementById('filterCard').value.trim();
   const nationalId = document.getElementById('filterNationalId').value.trim();
   const nationality = document.getElementById('filterNationality').value;
   const asylum = document.getElementById('filterAsylum').value;
+  const governorate = document.getElementById('filterGovernorate').value;
 
   let df = [...casesData];
 
-  // Year filter
   if (selectedYear !== 'all') {
     df = df.filter(r => String(r['Year'] || '').trim() === selectedYear);
   }
 
-  // Code filter — search in both C-Code and P-Code
   if (code) {
     const lc = code.toLowerCase();
     df = df.filter(r =>
@@ -339,29 +379,17 @@ function doSearch() {
     );
   }
 
-  // Name
   if (name) {
     const ln = name.toLowerCase();
     df = df.filter(r => String(r['Name'] || '').toLowerCase().includes(ln));
   }
 
-  // Individual number
   if (individual) df = df.filter(r => String(r['رقم كارت المفاوضية للفرد'] || '').includes(individual));
-
-  // Family number
   if (family) df = df.filter(r => String(r['رقم ملف المفاوضية'] || '').includes(family));
-
-  // Card number
-  if (card) df = df.filter(r => String(r['كود المفاوضية'] || '').includes(card));
-
-  // National ID
   if (nationalId) df = df.filter(r => String(r['الرقم القومى'] || '').includes(nationalId));
-
-  // Nationality
   if (nationality) df = df.filter(r => String(r['الجنسية'] || '').includes(nationality));
-
-  // Asylum
   if (asylum) df = df.filter(r => String(r['موقف اللجوء'] || '').includes(asylum));
+  if (governorate) df = df.filter(r => String(r['محافظة السكن الحالي'] || '').trim() === governorate);
 
   filteredData = df;
   currentPage = 1;
@@ -376,10 +404,10 @@ function clearFilters() {
   document.getElementById('filterName').value = '';
   document.getElementById('filterIndividual').value = '';
   document.getElementById('filterFamily').value = '';
-  document.getElementById('filterCard').value = '';
   document.getElementById('filterNationalId').value = '';
   document.getElementById('filterNationality').value = '';
   document.getElementById('filterAsylum').value = '';
+  document.getElementById('filterGovernorate').value = '';
 
   document.querySelectorAll('.accordion').forEach(a => a.classList.remove('open'));
 
@@ -396,57 +424,76 @@ function clearFilters() {
   document.getElementById('statusText').textContent = `جاهز — ${casesData.length.toLocaleString('ar-EG')} سجل`;
 }
 
+// ── Filter by governorate (called from map click) ──
+function filterByGovernorate(govName) {
+  // Switch to search tab
+  switchTab('search');
+
+  // Clear all other filters first
+  document.getElementById('filterCode').value = '';
+  document.getElementById('filterName').value = '';
+  document.getElementById('filterIndividual').value = '';
+  document.getElementById('filterFamily').value = '';
+  document.getElementById('filterNationalId').value = '';
+  document.getElementById('filterNationality').value = '';
+  document.getElementById('filterAsylum').value = '';
+  document.querySelectorAll('.accordion').forEach(a => a.classList.remove('open'));
+
+  // Set the governorate filter
+  const govSelect = document.getElementById('filterGovernorate');
+  // Try exact match first, then try partial
+  let matched = false;
+  for (const opt of govSelect.options) {
+    if (opt.value === govName) {
+      govSelect.value = govName;
+      matched = true;
+      break;
+    }
+  }
+  if (!matched) {
+    // Try partial match
+    for (const opt of govSelect.options) {
+      if (opt.value.includes(govName) || govName.includes(opt.value)) {
+        govSelect.value = opt.value;
+        break;
+      }
+    }
+  }
+
+  // Run the search
+  doSearch();
+}
+
 // ══════════════════════════════════════════════════
 //  STATS CALCULATION
 // ══════════════════════════════════════════════════
-function calculateStats(code) {
-  code = String(code || '').trim();
-
-  // First identify the P-Codes of the matching cases
-  let targetCases = [];
-  if (!code) {
-    targetCases = filteredData;
-  } else {
-    const lc = code.toLowerCase();
-    targetCases = filteredData.filter(r =>
-      String(r['C-Code'] || '').toLowerCase().includes(lc) ||
-      String(r['P-Code'] || '').toLowerCase().includes(lc)
-    );
-  }
-
-  // Count exactly how many unique case entries we have (families vs individuals)
-  const casesCount = targetCases.filter(r => String(r['P-Code'] || '').includes('-C-')).length;
-
-  // Now identify which services match these cases
-  // We extract a set of C-Codes and P-Codes from targetCases to filter services
-  const targetCCodes = new Set(targetCases.map(r => r['C-Code']?.trim()).filter(Boolean));
-  const targetPCodes = new Set(targetCases.map(r => r['P-Code']?.trim()).filter(Boolean));
-
-  // The services must match the currently filtered year/asylum/nationality implicitly because the cases were filtered!
-  // Wait, if a case matches, all its services are counted.
-  let matchedServices = servicesData.filter(svc => {
-    const c = svc['C-Code']?.trim() || '';
-    const p = svc['P-Code']?.trim() || '';
-    return targetCCodes.has(c) || targetPCodes.has(p);
-  });
-
-  const svcSum = matchedServices.reduce((s, r) => s + (parseFloat(r['عدد الخدمات']) || 0), 0);
-  const costSum = matchedServices.reduce((s, r) => s + (parseFloat(r['التكلفة']) || 0), 0);
+async function updateSearchStats(code) {
+  const casesCount = filteredData.length;
   
-  return { cases: casesCount, services: Math.floor(svcSum), cost: costSum };
-}
+  // Collect all filter logic identical to doSearch to send to SQLite
+  const filters = {
+    code: code || document.getElementById('filterCode').value.trim(),
+    name: document.getElementById('filterName').value.trim(),
+    individual: document.getElementById('filterIndividual').value.trim(),
+    family: document.getElementById('filterFamily').value.trim(),
+    nationalId: document.getElementById('filterNationalId').value.trim(),
+    nationality: document.getElementById('filterNationality').value,
+    asylum: document.getElementById('filterAsylum').value,
+    year: selectedYear
+  };
 
-function updateSearchStats(code) {
-  const stats = calculateStats(code);
-  animateValue('searchCases', stats.cases);
-  animateValue('searchServices', stats.services);
-  animateValue('searchCost', stats.cost);
-  document.getElementById('resultCount').textContent = `${filteredData.length.toLocaleString('ar-EG')} نتيجة`;
+  const stats = await window.electronAPI.getSearchStats(filters);
+  
+  animateValue('searchCases', casesCount);
+  animateValue('searchServices', Math.floor(stats.svcSum));
+  animateValue('searchCost', stats.costSum);
+  document.getElementById('resultCount').textContent = `${casesCount.toLocaleString('ar-EG')} نتيجة`;
 }
 
 // ── Smooth number animation ──
 function animateValue(elementId, endVal) {
   const el = document.getElementById(elementId);
+  if (!el) return;
   const startVal = parseInt(el.textContent.replace(/[^\d]/g, '') || '0');
   const diff = endVal - startVal;
   if (diff === 0) { el.textContent = endVal.toLocaleString('ar-EG'); return; }
@@ -456,7 +503,7 @@ function animateValue(elementId, endVal) {
 
   function step(now) {
     const progress = Math.min((now - startTime) / duration, 1);
-    const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+    const eased = 1 - Math.pow(1 - progress, 3);
     const current = Math.floor(startVal + diff * eased);
     el.textContent = current.toLocaleString('ar-EG');
     if (progress < 1) requestAnimationFrame(step);
@@ -489,7 +536,7 @@ function renderTable() {
   tbody.innerHTML = pageData.map((row) => {
     const ccode = escapeHtml(String(row['C-Code'] || ''));
     return `
-    <tr onclick="selectRow(this, '${ccode.replace(/'/g, "\\'")}')">
+    <tr onclick="selectRow(this, '${ccode.replace(/'/g, "\\\'")}')">
       <td>${ccode}</td>
       <td>${escapeHtml(String(row['Name'] || ''))}</td>
       <td>${escapeHtml(String(row['Age'] || ''))}</td>
@@ -497,7 +544,7 @@ function renderTable() {
       <td>${escapeHtml(String(row['الرقم القومى'] || ''))}</td>
       <td>${escapeHtml(String(row['رقم كارت المفاوضية للفرد'] || ''))}</td>
       <td>${escapeHtml(String(row['رقم ملف المفاوضية'] || ''))}</td>
-      <td>${escapeHtml(String(row['كود المفاوضية'] || ''))}</td>
+      <td>${escapeHtml(String(row['محافظة السكن الحالي'] || ''))}</td>
       <td>${escapeHtml(String(row['موقف اللجوء'] || ''))}</td>
     </tr>`;
   }).join('');
@@ -582,12 +629,121 @@ function sortTable(col) {
 }
 
 // ══════════════════════════════════════════════════
-//  ROW SELECTION
+//  ROW SELECTION → CASE MODAL
 // ══════════════════════════════════════════════════
 function selectRow(tr, code) {
   document.querySelectorAll('#tableBody tr').forEach(r => r.classList.remove('selected'));
   tr.classList.add('selected');
-  if (code) updateSearchStats(code);
+  currentSelectedCode = code;
+
+  // Find the case data
+  const caseRow = casesData.find(r => String(r['C-Code'] || '').trim() === code);
+  if (!caseRow) return;
+
+  // Build modal content
+  const modalBody = document.getElementById('caseModalBody');
+  modalBody.innerHTML = `
+    <div class="case-detail-grid">
+      <div class="case-detail-item">
+        <span class="case-detail-label">الكود</span>
+        <span class="case-detail-value case-code-link" onclick="openFrameworkDetails()" title="اضغط لعرض تفاصيل Framework">${escapeHtml(String(caseRow['C-Code'] || ''))}</span>
+      </div>
+      <div class="case-detail-item">
+        <span class="case-detail-label">اسم الحالة</span>
+        <span class="case-detail-value">${escapeHtml(String(caseRow['Name'] || 'غير معروف'))}</span>
+      </div>
+      <div class="case-detail-item">
+        <span class="case-detail-label">الجنسية</span>
+        <span class="case-detail-value">${escapeHtml(String(caseRow['الجنسية'] || '—'))}</span>
+      </div>
+      <div class="case-detail-item">
+        <span class="case-detail-label">العمر</span>
+        <span class="case-detail-value">${escapeHtml(String(caseRow['Age'] || '—'))} سنة</span>
+      </div>
+      <div class="case-detail-item">
+        <span class="case-detail-label">المحافظة</span>
+        <span class="case-detail-value">${escapeHtml(String(caseRow['محافظة السكن الحالي'] || '—'))}</span>
+      </div>
+      <div class="case-detail-item">
+        <span class="case-detail-label">الرقم القومي</span>
+        <span class="case-detail-value">${escapeHtml(String(caseRow['الرقم القومى'] || '—'))}</span>
+      </div>
+      <div class="case-detail-item">
+        <span class="case-detail-label">رقم المفاوضية للفرد</span>
+        <span class="case-detail-value">${escapeHtml(String(caseRow['رقم كارت المفاوضية للفرد'] || '—'))}</span>
+      </div>
+      <div class="case-detail-item">
+        <span class="case-detail-label">رقم المفاوضية للاسرة</span>
+        <span class="case-detail-value">${escapeHtml(String(caseRow['رقم ملف المفاوضية'] || '—'))}</span>
+      </div>
+      <div class="case-detail-item">
+        <span class="case-detail-label">تاريخ الإضافة</span>
+        <span class="case-detail-value">${escapeHtml(String(caseRow['CreatedOn'] || '—'))}</span>
+      </div>
+      <div class="case-detail-item">
+        <span class="case-detail-label">موقف اللجوء</span>
+        <span class="case-detail-value">${escapeHtml(String(caseRow['موقف اللجوء'] || '—'))}</span>
+      </div>
+    </div>
+  `;
+
+  // Show modal
+  document.getElementById('caseModal').classList.remove('hidden');
+}
+
+function closeCaseModal() {
+  document.getElementById('caseModal').classList.add('hidden');
+}
+
+async function openFrameworkDetails() {
+  closeCaseModal();
+  const code = currentSelectedCode;
+  if (!code) return;
+
+  const modalBody = document.getElementById('frameworkModalBody');
+  modalBody.innerHTML = '<div style="text-align:center;padding:2rem;"><div class="loading-spinner" style="width:30px;height:30px;border-width:3px;margin:0 auto 1rem;"></div><p>جاري البحث عن تفاصيل Framework...</p></div>';
+  document.getElementById('frameworkModal').classList.remove('hidden');
+
+  try {
+    const result = await window.electronAPI.getFrameworkData(code);
+    
+    if (!result.records || result.records.length === 0) {
+      // Try patient details as fallback
+      const patResult = await window.electronAPI.getPatientDetails(code);
+      if (patResult.cases && patResult.cases.length > 0) {
+        const patient = patResult.cases[0];
+        let html = '<div class="framework-detail-grid">';
+        for (const [key, val] of Object.entries(patient)) {
+          if (String(val).trim()) {
+            html += `<div class="case-detail-item"><span class="case-detail-label">${escapeHtml(key)}</span><span class="case-detail-value">${escapeHtml(String(val))}</span></div>`;
+          }
+        }
+        html += '</div>';
+        modalBody.innerHTML = html;
+      } else {
+        modalBody.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--slate-400);"><p>لا توجد بيانات Framework لهذا الكود بعد.<br>سيتم إضافتها عند رفع ملف Framework v5.</p></div>';
+      }
+      return;
+    }
+
+    let html = '';
+    for (const record of result.records) {
+      html += '<div class="framework-detail-grid">';
+      for (const [key, val] of Object.entries(record.data)) {
+        if (String(val).trim()) {
+          html += `<div class="case-detail-item"><span class="case-detail-label">${escapeHtml(key)}</span><span class="case-detail-value">${escapeHtml(String(val))}</span></div>`;
+        }
+      }
+      html += '</div>';
+    }
+    modalBody.innerHTML = html;
+  } catch (err) {
+    modalBody.innerHTML = `<div style="text-align:center;padding:2rem;color:var(--danger);">خطأ: ${err.message}</div>`;
+  }
+}
+
+function closeFrameworkModal() {
+  document.getElementById('frameworkModal').classList.add('hidden');
 }
 
 // ══════════════════════════════════════════════════
@@ -614,6 +770,21 @@ function toggleAccordion(id) {
 }
 
 // ══════════════════════════════════════════════════
+//  FILTER SIDEBAR TOGGLE
+// ══════════════════════════════════════════════════
+function toggleFilterSidebar() {
+  const sidebar = document.getElementById('filterSidebar');
+  const layout = document.querySelector('.search-layout');
+  const togBtn = document.getElementById('filterToggleBtn');
+  
+  sidebar.classList.toggle('collapsed');
+  layout.classList.toggle('sidebar-collapsed');
+  togBtn.classList.toggle('flipped');
+  
+  localStorage.setItem('mersal_filter_collapsed', sidebar.classList.contains('collapsed'));
+}
+
+// ══════════════════════════════════════════════════
 //  TAB SWITCHING
 // ══════════════════════════════════════════════════
 function switchTab(tabId) {
@@ -623,7 +794,14 @@ function switchTab(tabId) {
   document.querySelector(`.nav-item[data-tab="${tabId}"]`).classList.add('active');
 
   if (tabId === 'dashboard') {
-    setTimeout(() => { if (dashMap) dashMap.invalidateSize(); }, 150);
+    setTimeout(() => { 
+      if (!dashMap) {
+        initDashboard();
+        updateMap(filteredData);
+      } else {
+        dashMap.invalidateSize(); 
+      }
+    }, 150);
   }
 }
 
@@ -657,10 +835,13 @@ let yearlyChart = null;
 
 function initDashboard() {
   try {
-    if (!dashMap) {
+    const container = document.getElementById('mapContainer');
+    const isVisible = container && container.offsetHeight > 0 && container.offsetWidth > 0;
+    
+    if (!dashMap && isVisible) {
       dashMap = L.map('mapContainer', {
-        center: [26.8, 30.8],
-        zoom: 4,
+        center: [27.0, 30.0],
+        zoom: 6,
         zoomControl: true,
         scrollWheelZoom: true,
       });
@@ -669,21 +850,25 @@ function initDashboard() {
         attribution: '© OpenStreetMap © CARTO',
         maxZoom: 18,
       }).addTo(dashMap);
+      
+      // Force correct sizing after creation
+      setTimeout(() => dashMap.invalidateSize(), 200);
     }
   } catch (e) {
-    console.warn('Map init skipped (tab not visible yet)');
+    console.warn('Map init skipped:', e.message);
+    dashMap = null; // Reset so it can be retried
   }
 
   applyDashboardFilters();
 }
 
-function applyDashboardFilters() {
+async function applyDashboardFilters() {
   const asylum = document.getElementById('dashAsylum').value;
   const ageGroup = document.getElementById('dashAge').value;
   const nationality = document.getElementById('dashNationality').value;
   const service = document.getElementById('dashService').value;
 
-  // Filter cases
+  // Filter cases natively
   let filtC = [...casesData];
   if (asylum) filtC = filtC.filter(r => String(r['موقف اللجوء'] || '').includes(asylum));
   if (nationality) filtC = filtC.filter(r => String(r['الجنسية'] || '').includes(nationality));
@@ -697,18 +882,14 @@ function applyDashboardFilters() {
     });
   }
 
-  // Filter services
-  let filtS = [...servicesData];
-  if (asylum) filtS = filtS.filter(r => String(r['موقف اللجوء'] || '').includes(asylum));
-  if (nationality) filtS = filtS.filter(r => String(r['الجنسية'] || '').includes(nationality));
-  if (service) filtS = filtS.filter(r => String(r['الملف'] || '').includes(service));
+  // Filter services instantly via SQLite aggregate map
+  const stats = await window.electronAPI.getDashboardStats({ asylum, nationality, service });
 
-  // Update cards
-  const casesCount = filtC.filter(r => String(r['P-Code'] || '').includes('-C-')).length;
-  const svcSum = filtS.reduce((s, r) => s + (parseFloat(r['عدد الخدمات']) || 0), 0);
-  const costSum = filtS.reduce((s, r) => s + (parseFloat(r['التكلفة']) || 0), 0);
+  const casesCount = filtC.length;
+  const svcSum = stats.svcSum;
+  const costSum = stats.costSum;
 
-  animateValue('dashCases', filtC.length);
+  animateValue('dashCases', casesCount);
   animateValue('dashServices', Math.floor(svcSum));
   animateValue('dashCost', Math.floor(costSum));
 
@@ -735,25 +916,33 @@ const CHART_TOOLTIP = {
   padding: 12, cornerRadius: 8,
 };
 
-// ── Map ──
+// ── Map (Egyptian Governorates) ──
 function updateMap(data) {
   if (!dashMap) return;
 
   dashMarkers.forEach(m => dashMap.removeLayer(m));
   dashMarkers = [];
 
+  // Count by governorate
   const counts = {};
   data.forEach(r => {
-    const nat = String(r['الجنسية'] || '').trim();
-    if (nat && NAT_LOCATIONS[nat]) counts[nat] = (counts[nat] || 0) + 1; // Strict match
+    let gov = String(r['محافظة السكن الحالي'] || '').trim();
+    if (!gov) return;
+    // Normalize the name
+    const loc = GOV_LOCATIONS[gov];
+    if (loc) {
+      // Use the first matching key as canonical name
+      counts[gov] = (counts[gov] || 0) + 1;
+    }
   });
 
   const maxCount = Math.max(...Object.values(counts), 1);
 
-  for (const [nat, count] of Object.entries(counts)) {
-    const loc = NAT_LOCATIONS[nat]; // Safe to access since we filtered above
+  for (const [gov, count] of Object.entries(counts)) {
+    const loc = GOV_LOCATIONS[gov];
+    if (!loc) continue;
     const ratio = count / maxCount;
-    const size = 16 + ratio * 30;
+    const size = 18 + ratio * 32;
 
     const icon = L.divIcon({
       html: `<div style="
@@ -763,9 +952,9 @@ function updateMap(data) {
         border-radius: 50%;
         box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         display:flex; align-items:center; justify-content:center;
-        font-size:${Math.max(9, size * 0.3)}px; font-weight:700; color:white;
+        font-size:${Math.max(9, size * 0.28)}px; font-weight:700; color:white;
         font-family: 'DM Sans', sans-serif;
-      ">${count > 99 ? Math.round(count / 1000) + 'K' : count}</div>`,
+      ">${count > 999 ? Math.round(count / 1000) + 'K' : count}</div>`,
       className: '',
       iconSize: [size, size],
       iconAnchor: [size / 2, size / 2],
@@ -773,17 +962,27 @@ function updateMap(data) {
 
     const marker = L.marker([loc.lat, loc.lng], { icon }).addTo(dashMap);
     marker.bindPopup(`
-      <div style="font-family:'Cairo',sans-serif;font-size:13px;min-width:100px;text-align:right;direction:rtl;padding:4px">
-        <div style="font-size:14px;font-weight:700;color:#0a3a38;margin-bottom:4px">${loc.name || nat}</div>
-        <div style="color:#566070">عدد الحالات: <b style="color:#00A99D">${count.toLocaleString('ar-EG')}</b></div>
+      <div style="font-family:'Cairo',sans-serif;font-size:13px;min-width:150px;text-align:right;direction:rtl;padding:4px">
+        <div style="font-size:14px;font-weight:700;color:#0a3a38;margin-bottom:4px">${gov}</div>
+        <div style="color:#566070;margin-bottom:8px">عدد الحالات: <b style="color:#00A99D">${count.toLocaleString('ar-EG')}</b></div>
+        <button onclick="filterByGovernorate('${gov}')" style="
+          width:100%; padding:6px 12px; border:none; border-radius:6px;
+          background:linear-gradient(135deg,#00A99D,#33d1c6); color:white;
+          font-family:'Cairo',sans-serif; font-size:12px; font-weight:700;
+          cursor:pointer; display:flex; align-items:center; justify-content:center; gap:5px;
+        ">📋 عرض الحالات</button>
       </div>
     `);
+    // Also make the marker itself clickable (direct click without popup)
+    marker.on('click', function(e) {
+      // Show popup on first click, the button inside handles navigation
+    });
     dashMarkers.push(marker);
   }
 
-  if (Object.keys(counts).length > 1) {
-    const bounds = dashMarkers.map(m => m.getLatLng());
-    dashMap.fitBounds(bounds.map(b => [b.lat, b.lng]), { padding: [40, 40] });
+  // Fit bounds to Egypt
+  if (Object.keys(counts).length > 0) {
+    dashMap.fitBounds([[22, 25], [31.8, 35]], { padding: [20, 20] });
   }
 }
 
@@ -1015,9 +1214,13 @@ async function searchProfile() {
     document.getElementById('profCCode').textContent = patient['C-Code'] || '-';
     document.getElementById('profPCode').textContent = patient['P-Code'] || '-';
 
-    // Helper function to render a list of items using dynamic JSON key spotting
+    // Fetch services dynamically using SQLite for high speed
+    const profileServices = await window.electronAPI.getProfileServices(patient['C-Code'], patient['P-Code']);
+
+    // Helper function to render a list of items
     const renderList = (containerId, items, keyFilters) => {
       const container = document.getElementById(containerId);
+      if (!container) return; // safety
       container.innerHTML = '';
       if (!items || items.length === 0) {
         container.innerHTML = '<div class="prof-empty">لا يوجد بيانات مسجلة</div>';
@@ -1027,9 +1230,8 @@ async function searchProfile() {
       items.forEach(item => {
         let titleVal = '';
         let subtitleVal = '';
-        const data = item.data || item; // raw object from sqlite detail row OR service row
+        const data = item.data || item;
         
-        // Find suitable key for title (disease name, decision name, etc.)
         for (const k of Object.keys(data)) {
           if (k.toLowerCase().includes('c-code') || k.toLowerCase().includes('c code') || k.toLowerCase().includes('p-code')) continue;
           
@@ -1039,13 +1241,11 @@ async function searchProfile() {
           if (keyFilters.some(f => k.includes(f))) {
             if (!titleVal) titleVal = `<span class="badge bg-primary me-2">${k}</span> ${text}`;
             else {
-              // Try to map to subtitle instead of dumping in title
               subtitleVal += `<div class="prof-kv"><span>${k}</span> <span>${text}</span></div>`;
             }
           }
         }
         
-        // If we didn't find anything from keyFilters, just dump everything nicely
         if (!titleVal) {
           const keys = Object.keys(data).filter(k => 
             !k.toLowerCase().includes('c-code') && !k.toLowerCase().includes('c code') && !k.toLowerCase().includes('p-code') && String(data[k]).trim() !== ''
@@ -1074,13 +1274,39 @@ async function searchProfile() {
     const researches = details.filter(d => d.type === 'research' || d.type === 'classification');
     const budgets = details.filter(d => d.type === 'budget');
 
-    // Render Lists using smart key detection
     renderList('profDiseases', diseases, ['مرض', 'أمراض', 'disease', 'تشخيص', 'المرض']);
     renderList('profDecisions', decisions, ['قرار', 'القرار', 'تاريخ', 'لجنة', 'النوع', 'تصنيف', 'أطباء']);
     renderList('profResearch', researches, ['تصنيف', 'بحث', 'تاريخ', 'حالة البحث', 'class', 'موقف', 'نتيجة']);
     renderList('profBudget', budgets, ['مبلغ', 'صرف', 'دخل', 'ميزانية', 'نوع', 'جهة', 'قيمة', 'تاريخ']);
 
-    // Show results
+    // Render Services (Very Organized, Premium Look)
+    const svcsContainer = document.getElementById('profServices');
+    if (svcsContainer) {
+      svcsContainer.innerHTML = '';
+      if (!profileServices || profileServices.length === 0) {
+        svcsContainer.innerHTML = '<div class="prof-empty">لا يوجد خدمات طبيّة مسجلة</div>';
+      } else {
+        profileServices.forEach(svc => {
+          const specialty = svc['التخصص'] || svc['specialty'] || 'غير مسجل';
+          const fileName = svc['الملف'] || svc['file_name'] || 'بدون ملف';
+          const cost = svc['التكلفة'] || svc['cost'] || '0';
+          const count = svc['عدد الخدمات'] || svc['services_count'] || '1';
+
+          const div = document.createElement('div');
+          div.className = 'prof-item';
+          div.innerHTML = `
+            <div style="color:var(--text-primary); margin-bottom:8px; font-weight:bold; font-size:1.05rem; display:flex; justify-content:space-between; align-items:center;">
+              <span>${specialty}</span>
+              <span class="badge bg-primary" style="font-size:0.75rem">${count} خدمة</span>
+            </div>
+            <div class="prof-kv"><span>الملف</span> <span>${fileName}</span></div>
+            <div class="prof-kv"><span>التكلفة</span> <span style="color:#2196f3; font-weight:bold">${cost} ج.م</span></div>
+          `;
+          svcsContainer.appendChild(div);
+        });
+      }
+    }
+
     document.getElementById('profileResults').style.display = 'block';
 
   } catch (err) {
@@ -1089,4 +1315,3 @@ async function searchProfile() {
     document.getElementById('profileEmptyState').style.display = 'block';
   }
 }
-

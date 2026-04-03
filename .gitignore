@@ -35,5 +35,14 @@ implementation_plan_en.pdf
 new system files/
 
 # Package lock (optional — remove this line if you want exact reproducibility)
+# Package lock (optional — remove this line if you want exact reproducibility)
 # package-lock.json
 mersal_data/
+
+# Local databases and caches
+*.db
+.mersal-info-center/
+test-parse.js
+test_parse.js
+test_parse2.js
+seed.js

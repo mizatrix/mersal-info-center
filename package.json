@@ -1,6 +1,6 @@
 {
   "name": "mersal-info-center",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "مركز معلومات مرسال — Mersal Foundation Information Center",
   "author": "Nada Naser <nadanaser168@gmail.com>",
   "main": "main.js",
@@ -22,7 +22,9 @@
       "main.js",
       "preload.js",
       "src/**/*",
-      "node_modules/better-sqlite3/**/*"
+      "node_modules/better-sqlite3/**/*",
+      "node_modules/xlsx/**/*",
+      "node_modules/xlsx/dist/**/*"
     ],
     "asarUnpack": [
       "node_modules/better-sqlite3/**/*"
@@ -40,7 +42,15 @@
         "nsis",
         "portable"
       ],
-      "icon": "src/assets/logo.webp"
+      "icon": "src/assets/logo.webp",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "src/assets/logo.webp",
+      "uninstallerIcon": "src/assets/logo.webp",
+      "deleteAppDataOnUninstall": false
     }
   },
   "devDependencies": {
@@ -50,6 +60,7 @@
   },
   "dependencies": {
     "better-sqlite3": "^12.8.0",
+    "exceljs": "^4.4.0",
     "xlsx": "^0.18.5"
   }
 }
