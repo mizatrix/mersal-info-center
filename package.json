@@ -22,12 +22,14 @@
       "main.js",
       "preload.js",
       "src/**/*",
+      "mersal.db",
       "node_modules/better-sqlite3/**/*",
       "node_modules/xlsx/**/*",
       "node_modules/xlsx/dist/**/*"
     ],
     "asarUnpack": [
-      "node_modules/better-sqlite3/**/*"
+      "node_modules/better-sqlite3/**/*",
+      "mersal.db"
     ],
     "linux": {
       "target": [
