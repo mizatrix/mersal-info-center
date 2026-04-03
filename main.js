@@ -294,11 +294,19 @@ function saveCacheData(data) {
 }
 
 function createWindow() {
+  const { screen } = require('electron');
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width: screenW, height: screenH } = primaryDisplay.workAreaSize;
+
+  // Auto-fit window to screen size
+  const winWidth = Math.min(1440, screenW - 40);
+  const winHeight = Math.min(900, screenH - 40);
+
   mainWindow = new BrowserWindow({
-    width: 1440,
-    height: 900,
-    minWidth: 600,
-    minHeight: 700,
+    width: winWidth,
+    height: winHeight,
+    minWidth: 400,
+    minHeight: 400,
     frame: false,
     titleBarStyle: 'hidden',
     backgroundColor: '#f5f8fa',
@@ -311,6 +319,33 @@ function createWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
+
+  // Auto-zoom for small screens (e.g. ThinkPad 1366x768)
+  mainWindow.webContents.on('did-finish-load', () => {
+    let zoomFactor = 1.0;
+    if (screenW <= 1366) zoomFactor = 0.75;
+    else if (screenW <= 1600) zoomFactor = 0.85;
+    else if (screenW <= 1920) zoomFactor = 0.95;
+    mainWindow.webContents.setZoomFactor(zoomFactor);
+    console.log(`🖥️ Screen: ${screenW}x${screenH} → zoom: ${zoomFactor}`);
+  });
+
+  // Keyboard zoom: Ctrl+Plus / Ctrl+Minus / Ctrl+0
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.control && input.type === 'keyDown') {
+      const current = mainWindow.webContents.getZoomFactor();
+      if (input.key === '=' || input.key === '+') {
+        mainWindow.webContents.setZoomFactor(Math.min(current + 0.1, 1.5));
+        event.preventDefault();
+      } else if (input.key === '-') {
+        mainWindow.webContents.setZoomFactor(Math.max(current - 0.1, 0.5));
+        event.preventDefault();
+      } else if (input.key === '0') {
+        mainWindow.webContents.setZoomFactor(1.0);
+        event.preventDefault();
+      }
+    }
+  });
 
   if (process.argv.includes('--dev')) {
     mainWindow.webContents.openDevTools();
