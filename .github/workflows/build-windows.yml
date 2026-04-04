@@ -24,17 +24,27 @@ jobs:
       run: npm install
 
     - name: Build Windows App
-      run: npm run build:win
+      run: npm run build:win > build-log.txt 2>&1 || exit 1
+      shell: bash
+
+    - name: Upload Build Log
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-log
+        path: build-log.txt
 
     # Upload the NSIS installer (single .exe that includes everything)
     - name: Upload Installer
+      if: success()
       uses: actions/upload-artifact@v4
       with:
         name: Mersal-Info-Center-Setup
-        path: build/Mersal Info Center Setup*.exe
+        path: "build/Mersal Info Center Setup*.exe"
 
     # Also upload the full portable folder (in case installer isn't generated)
     - name: Upload Portable
+      if: success()
       uses: actions/upload-artifact@v4
       with:
         name: Mersal-Info-Center-Portable
