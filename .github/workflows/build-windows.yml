@@ -27,12 +27,15 @@ jobs:
       run: npm run build:win > build-log.txt 2>&1 || exit 1
       shell: bash
 
-    - name: Upload Build Log
+    - name: Upload Build Log as Commit
       if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-log
-        path: build-log.txt
+      run: |
+        git config --global user.name "github-actions"
+        git config --global user.email "github-actions@github.com"
+        git add build-log.txt
+        git commit -m "ci: append build log" || echo "No changes"
+        git push || echo "Push failed"
+      shell: bash
 
     # Upload the NSIS installer (single .exe that includes everything)
     - name: Upload Installer
