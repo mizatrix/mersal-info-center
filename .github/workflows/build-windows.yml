@@ -26,8 +26,16 @@ jobs:
     - name: Build Windows App
       run: npm run build:win
 
-    - name: Upload Artifacts
+    # Upload the NSIS installer (single .exe that includes everything)
+    - name: Upload Installer
       uses: actions/upload-artifact@v4
       with:
-        name: Mersal-Info-Center-Windows
-        path: build/*.exe
+        name: Mersal-Info-Center-Setup
+        path: build/Mersal Info Center Setup*.exe
+
+    # Also upload the full portable folder (in case installer isn't generated)
+    - name: Upload Portable
+      uses: actions/upload-artifact@v4
+      with:
+        name: Mersal-Info-Center-Portable
+        path: build/win-unpacked/
