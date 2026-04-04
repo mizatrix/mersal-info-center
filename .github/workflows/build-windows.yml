@@ -26,19 +26,37 @@ jobs:
     - name: Install Dependencies
       run: npm install
 
-    - name: Build Windows App
+    # --- FULL VERSION (WITH DATA) ---
+    - name: Build Windows App (With Data)
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: npm run build:win
 
-    # Upload the NSIS installer (single .exe that includes everything)
-    - name: Upload Installer
+    - name: Upload Installer (With Data)
       uses: actions/upload-artifact@v4
       with:
-        name: Mersal-Info-Center-Setup
+        name: Mersal-Info-Center-Setup-With-Data
         path: "build/Mersal Info Center Setup*.exe"
 
-    # Also upload the full portable folder (in case installer isn't generated)
+    # --- EMPTY VERSION (NO DATA) ---
+    - name: Wipe Database for Empty Build
+      shell: bash
+      run: |
+        rm -f mersal.db
+        node -e "require('better-sqlite3')('mersal.db').close()"
+
+    - name: Build Windows App (Empty)
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: npm run build:win
+
+    - name: Upload Installer (Empty)
+      uses: actions/upload-artifact@v4
+      with:
+        name: Mersal-Info-Center-Setup-Empty
+        path: "build/Mersal Info Center Setup*.exe"
+
+    # Upload the portable folder of the empty version just in case
     - name: Upload Portable
       uses: actions/upload-artifact@v4
       with:
