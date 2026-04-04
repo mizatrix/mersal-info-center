@@ -44,14 +44,14 @@
         "nsis",
         "portable"
       ],
-      "icon": "src/assets/logo.webp",
+      "icon": "src/assets/logo.ico",
       "requestedExecutionLevel": "asInvoker"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "installerIcon": "src/assets/logo.webp",
-      "uninstallerIcon": "src/assets/logo.webp",
+      "installerIcon": "src/assets/logo.ico",
+      "uninstallerIcon": "src/assets/logo.ico",
       "deleteAppDataOnUninstall": false
     }
   },
