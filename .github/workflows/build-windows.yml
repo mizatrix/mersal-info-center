@@ -43,7 +43,7 @@ jobs:
       shell: bash
       run: |
         rm -f mersal.db
-        node -e "require('better-sqlite3')('mersal.db').close()"
+        touch mersal.db
 
     - name: Build Windows App (Empty)
       env:
