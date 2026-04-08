@@ -16,11 +16,10 @@ const PAGE_SIZE = 50;
 
 // قائمة الإيميلات المصرح لها بالدخول
 const ALLOWED_EMAILS = [
-  'admin@mersal.org',
-  'demo@mersal.org',
-  'moataz@mersal.org',
-  'alaa@mersal.org',
-  'nour@mersal.org'
+  'mamdouhyaseen@mersal.org',
+  'omarabdallah@mersal.org',
+  'nadaabdelnaser@mersal.org',
+
 ];
 
 // ── Egyptian Governorate Locations (for map) ──
@@ -115,13 +114,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Check if user already logged in
-  const savedEmail = localStorage.getItem('mersal_user_email');
-  if (savedEmail) {
-    currentUserEmail = savedEmail;
-    showApp();
-    await loadAllData();
-  }
+  // جديد
+const savedEmail = localStorage.getItem('mersal_user_email');
+const savedVersion = localStorage.getItem('mersal_session_version');
+const appVersion = await window.electronAPI.getAppVersion();
+
+if (savedEmail && savedVersion === appVersion) {
+  // نفس الفيرجن → دخول تلقائي
+  currentUserEmail = savedEmail;
+  showApp();
+  await loadAllData();
+} else {
+  // فيرجن جديدة → امسح الجلسة القديمة
+  localStorage.removeItem('mersal_user_email');
+  localStorage.removeItem('mersal_session_version');
+}
 });
 
 // ══════════════════════════════════════════════════
@@ -541,11 +548,7 @@ function renderTable() {
       <td>${escapeHtml(String(row['Name'] || ''))}</td>
       <td>${escapeHtml(String(row['Age'] || ''))}</td>
       <td>${escapeHtml(String(row['الجنسية'] || ''))}</td>
-      <td>${escapeHtml(String(row['الرقم القومى'] || ''))}</td>
-      <td>${escapeHtml(String(row['رقم كارت المفاوضية للفرد'] || ''))}</td>
-      <td>${escapeHtml(String(row['رقم ملف المفاوضية'] || ''))}</td>
       <td>${escapeHtml(String(row['محافظة السكن الحالي'] || ''))}</td>
-      <td>${escapeHtml(String(row['موقف اللجوء'] || ''))}</td>
     </tr>`;
   }).join('');
 
