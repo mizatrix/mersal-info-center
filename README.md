@@ -37,13 +37,23 @@
 | **Node.js** | 18+ | [nodejs.org](https://nodejs.org/) |
 | **Python** | 3.8+ | [python.org](https://www.python.org/) |
 | **Git** | أي إصدار | [git-scm.com](https://git-scm.com/) |
+| **Git LFS** | أي إصدار | [git-lfs.com](https://git-lfs.com/) |
+
+> ⚠️ **مهم — قاعدة البيانات:** هذا المشروع يستخدم **Git LFS** لتخزين ملف `mersal.db` (276 MB). إذا استنسخت المشروع بدون تثبيت Git LFS مسبقاً، ستجد التطبيق يعمل لكن **بدون بيانات**. تأكد من تنفيذ الخطوة التالية أولاً.
+>
+> **Important — Database:** This project uses **Git LFS** to store `mersal.db` (276 MB). If you clone without Git LFS installed, the app will open but **show no data**. Make sure to run the step below first.
 
 ---
 
 ## 🚀 التشغيل المحلي | Local Development
 
 ```bash
-# 1. استنساخ المشروع
+# 0. تثبيت Git LFS (مرة واحدة فقط على الجهاز)
+#    Install Git LFS (one-time setup per machine)
+git lfs install
+
+# 1. استنساخ المشروع (سيتم تحميل قاعدة البيانات تلقائياً)
+#    Clone the repo (database will download automatically)
 git clone https://github.com/YOUR_USERNAME/mersal-info-center.git
 cd mersal-info-center
 
@@ -56,6 +66,14 @@ pip install requests
 # 4. تشغيل التطبيق
 npm start
 ```
+
+> 💡 **إذا استنسخت المشروع مسبقاً بدون Git LFS | Already cloned without LFS?**
+> ```bash
+> git lfs install
+> git lfs pull
+> ```
+> هذا سيحمّل قاعدة البيانات الحقيقية بدلاً من ملف المؤشر الصغير.
+> This downloads the real database instead of the small pointer file.
 
 ---
 
