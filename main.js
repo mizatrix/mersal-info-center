@@ -25,11 +25,26 @@ function getDatabase() {
   if (db) return db;
   ensureDbDir();
 
-  // Auto-seed database from project workspace if missing in hone directory
+  // Auto-seed database from project workspace if missing or outdated in home directory
   const localDbPath = path.join(__dirname, 'mersal.db');
-  if (!fs.existsSync(DB_PATH) && fs.existsSync(localDbPath)) {
-    console.log('🔄 Auto-seeding mersal.db from project directory to home directory...');
-    fs.copyFileSync(localDbPath, DB_PATH);
+  if (fs.existsSync(localDbPath)) {
+    let needsCopy = false;
+    if (!fs.existsSync(DB_PATH)) {
+      needsCopy = true;
+      console.log('🔄 Auto-seeding mersal.db (first run)...');
+    } else {
+      // Compare bundled vs home DB sizes — if different, bundled is newer
+      const bundledSize = fs.statSync(localDbPath).size;
+      const homeSize = fs.statSync(DB_PATH).size;
+      if (bundledSize !== homeSize) {
+        needsCopy = true;
+        console.log(`🔄 Bundled DB differs (${(bundledSize/1024/1024).toFixed(1)}MB vs ${(homeSize/1024/1024).toFixed(1)}MB) — re-seeding...`);
+      }
+    }
+    if (needsCopy) {
+      fs.copyFileSync(localDbPath, DB_PATH);
+      console.log('✅ mersal.db seeded to home directory');
+    }
   }
 
   db = new Database(DB_PATH);

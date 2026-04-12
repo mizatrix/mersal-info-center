@@ -37,7 +37,7 @@ new system files/
 # Package lock (optional — remove this line if you want exact reproducibility)
 # Package lock (optional — remove this line if you want exact reproducibility)
 # package-lock.json
-mersal_data/
+# mersal_data/
 
 # Local databases and caches
 *.db
