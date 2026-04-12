@@ -1309,3 +1309,52 @@ tbody td:first-child {
   .login-btn { height: 42px; font-size: 13px; }
 }
 
+/* ══════════ IC TABLE ENHANCEMENTS ══════════ */
+.code-cell {
+  display: inline-block;
+  padding: 2px 10px;
+  background: linear-gradient(135deg, var(--teal-50), rgba(61,191,184,0.08));
+  border: 1px solid var(--teal-200);
+  border-radius: 6px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--teal-700);
+  letter-spacing: 0.03em;
+}
+
+/* ══════════ MODAL SECTION TITLES ══════════ */
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--slate-700);
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--slate-100);
+}
+
+.ic-info-section,
+.ic-extra-section,
+.fw-preview-section {
+  background: var(--slate-50);
+  border: 1px solid var(--slate-150);
+  border-radius: var(--r-lg);
+  padding: 18px 20px;
+}
+
+.ic-info-section {
+  border-right: 4px solid var(--teal-500);
+}
+
+.ic-extra-section {
+  border-right: 4px solid var(--amber);
+}
+
+.fw-preview-section {
+  border-right: 4px solid #2196f3;
+}
+

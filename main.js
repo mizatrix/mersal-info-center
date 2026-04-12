@@ -433,7 +433,7 @@ async function streamServicesIntoDb(fullPath, database) {
 function scoreColumns(cols) {
   const lower = cols.map(c => c.trim().toLowerCase());
   let score = 0;
-  if (lower.includes('c-code') || lower.includes('c code')) score += 10;
+  if (lower.includes('c-code') || lower.includes('c code') || lower.includes('كود الحالة')) score += 10;
   if (lower.includes('p-code') || lower.includes('p code')) score += 5;
   if (lower.includes('الجنسية') || lower.includes('nationality')) score += 3;
   if (lower.includes('الخدمة') || lower.includes('نوع الخدمة')) score += 3;
@@ -498,8 +498,8 @@ function routeRows(lowerFile, allRows, casesData, servicesData, detailsData, icD
       }
       let ccode = nr['c-code'] || nr['c code'] || nr['الكود'] || nr['كود'] || nr['كود الحالة'] || '';
       if (ccode) {
-        const caseName = nr['اسم الحالة'] || nr['الاسم'] || nr['name'] || nr['case name'] || '';
-        const phone = nr['رقم التليفون'] || nr['التليفون'] || nr['الهاتف'] || nr['phone'] || '';
+        const caseName = nr['إسم الحالة'] || nr['اسم الحالة'] || nr['الاسم'] || nr['name'] || nr['case name'] || '';
+        const phone = nr['موبايل'] || nr['رقم التليفون'] || nr['التليفون'] || nr['الهاتف'] || nr['phone'] || '';
         const dateAdded = nr['تاريخ الاضافة'] || nr['تاريخ الإضافة'] || nr['التاريخ'] || nr['createdon'] || '';
         const gov = nr['المحافظة'] || nr['محافظة السكن الحالي'] || nr['المحافظه'] || '';
         icData.push({ c_code: String(ccode).trim(), case_name: String(caseName).trim(), phone: String(phone).trim(), date_added: String(dateAdded).trim(), governorate: String(gov).trim(), data: row });
@@ -690,6 +690,29 @@ ipcMain.handle('get-filter-options', async () => {
 ipcMain.handle('get-search-stats', async (event, filters) => {
   try {
     const database = getDatabase();
+    
+    // Check if we have per-case services or summary data
+    const summaryCheck = database.prepare("SELECT COUNT(*) as cnt FROM services WHERE c_code = 'SUMMARY'").get();
+    const hasSummaryData = summaryCheck && summaryCheck.cnt > 0;
+    
+    if (hasSummaryData) {
+      // Summary pivot data: aggregate from summary rows, filter by year if needed
+      let query = "SELECT SUM(CAST(REPLACE(services_count, ',', '') AS FLOAT)) as svcCount, SUM(CAST(REPLACE(cost, ',', '') AS FLOAT)) as totalCost FROM services WHERE c_code = 'SUMMARY'";
+      const params = [];
+      
+      if (filters.year && filters.year !== 'all') {
+        query += " AND specialty = ?";
+        params.push(filters.year);
+      }
+      
+      const row = database.prepare(query).get(...params);
+      return {
+        svcSum: row ? (row.svcCount || 0) : 0,
+        costSum: row ? (row.totalCost || 0) : 0
+      };
+    }
+    
+    // Original per-case service data path
     let query = `
       SELECT SUM(CAST(REPLACE(s.services_count, ',', '') AS FLOAT)) as svcCount, 
              SUM(CAST(REPLACE(s.cost, ',', '') AS FLOAT)) as totalCost 
@@ -700,7 +723,6 @@ ipcMain.handle('get-search-stats', async (event, filters) => {
     `;
     const params = [];
 
-    // Apply the same filters as doSearch
     if (filters.code) {
       query += " AND (c.c_code LIKE ? OR c.p_code LIKE ?)";
       params.push(`%${filters.code}%`, `%${filters.code}%`);
@@ -882,6 +904,37 @@ ipcMain.handle('get-framework-data', async (event, code) => {
     }));
     return { records, error: null };
   } catch (err) {
+    return { records: [], error: err.message };
+  }
+});
+
+// ── IPC: Load All IC Records (for main table) ──
+ipcMain.handle('load-ic-records', async () => {
+  try {
+    const database = getDatabase();
+    const rows = database.prepare('SELECT id, c_code, case_name, phone, date_added, governorate, record_data FROM ic_records ORDER BY id').all();
+    const records = rows.map(r => {
+      // Convert Excel serial date to readable format
+      let dateStr = r.date_added || '';
+      const dateNum = parseFloat(dateStr);
+      if (!isNaN(dateNum) && dateNum > 20000 && dateNum < 60000) {
+        // Excel date serial number → JS Date
+        const excelEpoch = new Date(1899, 11, 30); // Dec 30, 1899
+        const jsDate = new Date(excelEpoch.getTime() + dateNum * 86400000);
+        dateStr = jsDate.toLocaleDateString('ar-EG', { year: 'numeric', month: '2-digit', day: '2-digit' });
+      }
+      return {
+        c_code: r.c_code || '',
+        case_name: r.case_name || '',
+        phone: r.phone || '',
+        date_added: dateStr,
+        governorate: r.governorate || '',
+        record_data: r.record_data ? JSON.parse(r.record_data) : {}
+      };
+    });
+    return { records, error: null };
+  } catch (err) {
+    console.error('Error loading IC records:', err);
     return { records: [], error: err.message };
   }
 });

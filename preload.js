@@ -17,4 +17,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getProfileServices: (ccode, pcode) => ipcRenderer.invoke('get-profile-services', ccode, pcode),
   exportExcel: (data) => ipcRenderer.invoke('export-excel', data),
   onProgress: (callback) => ipcRenderer.on('download-progress', (_event, msg) => callback(msg)),
+  loadICRecords: () => ipcRenderer.invoke('load-ic-records'),
 });

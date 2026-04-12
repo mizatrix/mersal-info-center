@@ -5,44 +5,64 @@
 // ── State ──
 let casesData = [];
 let servicesData = [];
+let icRecordsData = []; // IC records for main table
 let filteredData = [];
+let filteredICData = []; // Filtered IC records for the table
 let currentPage = 1;
 let sortCol = null;
 let sortDir = 'asc';
 let selectedYear = 'all';
 let currentUserEmail = '';
 let currentSelectedCode = ''; // For modal
+let currentSelectedICRecord = null; // Currently selected IC record
 const PAGE_SIZE = 50;
 
 // قائمة الإيميلات المصرح لها بالدخول
 const ALLOWED_EMAILS = [
-  'mamdouhyaseen@mersal.org',
-  'omarabdallah@mersal.org',
-  'nadaabdelnaser@mersal.org',
-
+  'admin@mersal.org',
+  'demo@mersal.org',
+  'moataz@mersal.org',
+  'alaa@mersal.org',
+  'nour@mersal.org'
 ];
 
 // ── Egyptian Governorate Locations (for map) ──
 const GOV_LOCATIONS = {
   'القاهرة': { lat: 30.04, lng: 31.24 },
+  'القاهره': { lat: 30.04, lng: 31.24 },
   'الجيزة': { lat: 30.01, lng: 31.21 },
+  'الجيزه': { lat: 30.01, lng: 31.21 },
   'الإسكندرية': { lat: 31.20, lng: 29.92 },
   'الاسكندرية': { lat: 31.20, lng: 29.92 },
+  'الاسكندريه': { lat: 31.20, lng: 29.92 },
   'الدقهلية': { lat: 31.05, lng: 31.38 },
+  'الدقهليه': { lat: 31.05, lng: 31.38 },
   'دقهلية': { lat: 31.05, lng: 31.38 },
+  'دقهليه': { lat: 31.05, lng: 31.38 },
   'الشرقية': { lat: 30.55, lng: 31.70 },
+  'الشرقيه': { lat: 30.55, lng: 31.70 },
   'شرقية': { lat: 30.55, lng: 31.70 },
+  'شرقيه': { lat: 30.55, lng: 31.70 },
   'القليوبية': { lat: 30.33, lng: 31.24 },
+  'القليوبيه': { lat: 30.33, lng: 31.24 },
   'قليوبية': { lat: 30.33, lng: 31.24 },
+  'قليوبيه': { lat: 30.33, lng: 31.24 },
   'كفر الشيخ': { lat: 31.34, lng: 30.94 },
   'الغربية': { lat: 30.87, lng: 31.03 },
+  'الغربيه': { lat: 30.87, lng: 31.03 },
   'غربية': { lat: 30.87, lng: 31.03 },
+  'غربيه': { lat: 30.87, lng: 31.03 },
   'المنوفية': { lat: 30.52, lng: 30.99 },
+  'المنوفيه': { lat: 30.52, lng: 30.99 },
   'منوفية': { lat: 30.52, lng: 30.99 },
+  'منوفيه': { lat: 30.52, lng: 30.99 },
   'البحيرة': { lat: 30.84, lng: 30.34 },
+  'البحيره': { lat: 30.84, lng: 30.34 },
   'بحيرة': { lat: 30.84, lng: 30.34 },
+  'بحيره': { lat: 30.84, lng: 30.34 },
   'الإسماعيلية': { lat: 30.60, lng: 32.27 },
   'الاسماعيلية': { lat: 30.60, lng: 32.27 },
+  'الاسماعيليه': { lat: 30.60, lng: 32.27 },
   'السويس': { lat: 29.97, lng: 32.55 },
   'سويس': { lat: 29.97, lng: 32.55 },
   'بورسعيد': { lat: 31.27, lng: 32.30 },
@@ -50,6 +70,7 @@ const GOV_LOCATIONS = {
   'الفيوم': { lat: 29.30, lng: 30.84 },
   'فيوم': { lat: 29.30, lng: 30.84 },
   'بني سويف': { lat: 29.07, lng: 31.10 },
+  'بنى سويف': { lat: 29.07, lng: 31.10 },
   'المنيا': { lat: 28.08, lng: 30.75 },
   'منيا': { lat: 28.08, lng: 30.75 },
   'أسيوط': { lat: 27.18, lng: 31.17 },
@@ -64,6 +85,7 @@ const GOV_LOCATIONS = {
   'البحر الأحمر': { lat: 25.07, lng: 33.82 },
   'البحر الاحمر': { lat: 25.07, lng: 33.82 },
   'الوادي الجديد': { lat: 25.44, lng: 30.55 },
+  'الوادى الجديد': { lat: 25.44, lng: 30.55 },
   'مطروح': { lat: 31.35, lng: 27.24 },
   'مرسى مطروح': { lat: 31.35, lng: 27.24 },
   'شمال سيناء': { lat: 31.07, lng: 33.83 },
@@ -114,21 +136,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // جديد
-const savedEmail = localStorage.getItem('mersal_user_email');
-const savedVersion = localStorage.getItem('mersal_session_version');
-const appVersion = await window.electronAPI.getAppVersion();
-
-if (savedEmail && savedVersion === appVersion) {
-  // نفس الفيرجن → دخول تلقائي
-  currentUserEmail = savedEmail;
-  showApp();
-  await loadAllData();
-} else {
-  // فيرجن جديدة → امسح الجلسة القديمة
-  localStorage.removeItem('mersal_user_email');
-  localStorage.removeItem('mersal_session_version');
-}
+  // Check if user already logged in
+  const savedEmail = localStorage.getItem('mersal_user_email');
+  if (savedEmail) {
+    currentUserEmail = savedEmail;
+    showApp();
+    await loadAllData();
+  }
 });
 
 // ══════════════════════════════════════════════════
@@ -209,22 +223,34 @@ async function loadAllData() {
     const source = result.fromCache ? '(من الذاكرة المحلية)' : '(من OneDrive)';
     console.log(`✅ Loaded ${casesData.length} cases ${source}`);
 
+    // Load IC records for the main table
+    try {
+      const icResult = await window.electronAPI.loadICRecords();
+      if (!icResult.error) {
+        icRecordsData = icResult.records || [];
+        console.log(`✅ Loaded ${icRecordsData.length} IC records for table`);
+      }
+    } catch (icErr) {
+      console.warn('⚠️ Could not load IC records:', icErr);
+    }
+
     // Populate filters async
     await populateFilters();
     populateYearTimeline();
 
-    // Initial display
+    // Initial display — main table now shows IC records
     filteredData = [...casesData];
-    filteredData.sort((a, b) => {
-      let va = a['C-Code'] ?? '';
-      let vb = b['C-Code'] ?? '';
+    filteredICData = [...icRecordsData];
+    filteredICData.sort((a, b) => {
+      let va = a.c_code ?? '';
+      let vb = b.c_code ?? '';
       return va.localeCompare(vb, 'ar', { numeric: true });
     });
     
-    sortCol = 'C-Code';
+    sortCol = 'c_code';
     sortDir = 'asc';
     document.querySelectorAll('th.sortable').forEach(th => {
-      if (th.dataset.col === 'C-Code') th.classList.add('sort-asc');
+      if (th.dataset.col === 'c_code') th.classList.add('sort-asc');
     });
 
     renderTable();
@@ -233,9 +259,10 @@ async function loadAllData() {
     // Initialize dashboard
     initDashboard();
 
+    const totalCount = icRecordsData.length > 0 ? icRecordsData.length : casesData.length;
     const loadTime = new Date().toLocaleTimeString('ar-EG');
     const cacheNote = result.fromCache ? ' ⚡' : '';
-    document.getElementById('statusText').textContent = `جاهز — ${casesData.length.toLocaleString('ar-EG')} سجل ${source} (${loadTime})${cacheNote}`;
+    document.getElementById('statusText').textContent = `جاهز — ${totalCount.toLocaleString('ar-EG')} سجل ${source} (${loadTime})${cacheNote}`;
 
   } catch (err) {
     console.error('❌ Error:', err);
@@ -283,13 +310,22 @@ async function refreshData() {
       document.getElementById('dataVersion').textContent = result.dataVersion;
     }
 
+    // Reload IC records
+    try {
+      const icResult = await window.electronAPI.loadICRecords();
+      if (!icResult.error) {
+        icRecordsData = icResult.records || [];
+      }
+    } catch (icErr) { console.warn('IC reload failed:', icErr); }
+
     await populateFilters();
     populateYearTimeline();
     
     filteredData = [...casesData];
-    filteredData.sort((a, b) => {
-      let va = a['C-Code'] ?? '';
-      let vb = b['C-Code'] ?? '';
+    filteredICData = [...icRecordsData];
+    filteredICData.sort((a, b) => {
+      let va = a.c_code ?? '';
+      let vb = b.c_code ?? '';
       return va.localeCompare(vb, 'ar', { numeric: true });
     });
 
@@ -297,8 +333,9 @@ async function refreshData() {
     updateSearchStats();
     initDashboard();
 
+    const totalCount = icRecordsData.length > 0 ? icRecordsData.length : casesData.length;
     const loadTime = new Date().toLocaleTimeString('ar-EG');
-    document.getElementById('statusText').textContent = `تم التحديث — ${casesData.length.toLocaleString('ar-EG')} سجل (${loadTime})`;
+    document.getElementById('statusText').textContent = `تم التحديث — ${totalCount.toLocaleString('ar-EG')} سجل (${loadTime})`;
   } catch (err) {
     console.error('❌ Refresh error:', err);
     document.getElementById('statusText').textContent = 'خطأ في التحديث';
@@ -311,8 +348,16 @@ async function refreshData() {
 //  POPULATE FILTERS
 // ══════════════════════════════════════════════════
 async function populateFilters() {
+  // Use IC records as primary data source, fallback to cases
+  const primaryData = icRecordsData.length > 0 ? icRecordsData : null;
+
   // Nationalities
-  const nats = [...new Set(casesData.map(r => String(r['الجنسية'] || '').trim()).filter(Boolean))].sort();
+  let nats;
+  if (primaryData) {
+    nats = [...new Set(primaryData.map(r => String((r.record_data || {})['الجنسية'] || (r.record_data || {})['الجنسيه'] || '').trim()).filter(Boolean))].sort();
+  } else {
+    nats = [...new Set(casesData.map(r => String(r['الجنسية'] || '').trim()).filter(Boolean))].sort();
+  }
   const natSelect = document.getElementById('filterNationality');
   const dashNatSelect = document.getElementById('dashNationality');
   nats.forEach(n => {
@@ -320,8 +365,13 @@ async function populateFilters() {
     dashNatSelect.add(new Option(n, n));
   });
 
-  // Asylum statuses
-  const asylums = [...new Set(casesData.map(r => String(r['موقف اللجوء'] || '').trim()).filter(Boolean))].sort();
+  // Asylum / Status
+  let asylums;
+  if (primaryData) {
+    asylums = [...new Set(primaryData.map(r => String((r.record_data || {})['موقف الحالة'] || (r.record_data || {})['وضع الحاله في مصر'] || '').trim()).filter(Boolean))].sort();
+  } else {
+    asylums = [...new Set(casesData.map(r => String(r['موقف اللجوء'] || '').trim()).filter(Boolean))].sort();
+  }
   if (!asylums.includes('مواطن')) asylums.push('مواطن');
   
   const asylumSelect = document.getElementById('filterAsylum');
@@ -332,7 +382,12 @@ async function populateFilters() {
   });
 
   // Governorates
-  const govs = [...new Set(casesData.map(r => String(r['محافظة السكن الحالي'] || '').trim()).filter(Boolean))].sort();
+  let govs;
+  if (primaryData) {
+    govs = [...new Set(primaryData.map(r => String(r.governorate || '').trim()).filter(Boolean))].sort();
+  } else {
+    govs = [...new Set(casesData.map(r => String(r['محافظة السكن الحالي'] || '').trim()).filter(Boolean))].sort();
+  }
   const govSelect = document.getElementById('filterGovernorate');
   govs.forEach(g => govSelect.add(new Option(g, g)));
 
@@ -344,10 +399,27 @@ async function populateFilters() {
 }
 
 function populateYearTimeline() {
-  const years = [...new Set(casesData.map(r => {
-    const y = r['Year'];
-    return y ? String(y).trim() : null;
-  }).filter(Boolean))].sort();
+  let years;
+  if (icRecordsData.length > 0) {
+    years = [...new Set(icRecordsData.map(r => {
+      const dateVal = r.date_added || '';
+      const dateNum = parseFloat(dateVal);
+      if (!isNaN(dateNum) && dateNum > 20000 && dateNum < 60000) {
+        const jsDate = new Date(new Date(1899, 11, 30).getTime() + dateNum * 86400000);
+        return String(jsDate.getFullYear());
+      }
+      if (typeof dateVal === 'string' && dateVal.includes('/')) {
+        const parts = dateVal.split('/');
+        return parts[parts.length - 1].length === 4 ? parts[parts.length - 1] : parts[0];
+      }
+      return null;
+    }).filter(Boolean))].sort();
+  } else {
+    years = [...new Set(casesData.map(r => {
+      const y = r['Year'];
+      return y ? String(y).trim() : null;
+    }).filter(Boolean))].sort();
+  }
 
   const container = document.getElementById('timelineYears');
   years.forEach(yr => {
@@ -372,12 +444,11 @@ function doSearch() {
   const asylum = document.getElementById('filterAsylum').value;
   const governorate = document.getElementById('filterGovernorate').value;
 
+  // Filter cases data (for dashboard/stats)
   let df = [...casesData];
-
   if (selectedYear !== 'all') {
     df = df.filter(r => String(r['Year'] || '').trim() === selectedYear);
   }
-
   if (code) {
     const lc = code.toLowerCase();
     df = df.filter(r =>
@@ -385,25 +456,68 @@ function doSearch() {
       String(r['P-Code'] || '').toLowerCase().includes(lc)
     );
   }
-
   if (name) {
     const ln = name.toLowerCase();
     df = df.filter(r => String(r['Name'] || '').toLowerCase().includes(ln));
   }
-
   if (individual) df = df.filter(r => String(r['رقم كارت المفاوضية للفرد'] || '').includes(individual));
   if (family) df = df.filter(r => String(r['رقم ملف المفاوضية'] || '').includes(family));
   if (nationalId) df = df.filter(r => String(r['الرقم القومى'] || '').includes(nationalId));
   if (nationality) df = df.filter(r => String(r['الجنسية'] || '').includes(nationality));
   if (asylum) df = df.filter(r => String(r['موقف اللجوء'] || '').includes(asylum));
-  if (governorate) df = df.filter(r => String(r['محافظة السكن الحالي'] || '').trim() === governorate);
-
+  if (governorate) {
+    // Normalize ة↔ه for comparison
+    const normGov = (s) => s.replace(/[ةه]/g, 'ه').replace(/[أإآا]/g, 'ا').trim();
+    const govNorm = normGov(governorate);
+    df = df.filter(r => normGov(String(r['محافظة السكن الحالي'] || '')) === govNorm);
+  }
   filteredData = df;
+
+  // Filter IC records (for the main table)
+  let icDf = [...icRecordsData];
+  if (code) {
+    const lc = code.toLowerCase();
+    icDf = icDf.filter(r => String(r.c_code || '').toLowerCase().includes(lc));
+  }
+  if (name) {
+    const ln = name.toLowerCase();
+    icDf = icDf.filter(r => String(r.case_name || '').toLowerCase().includes(ln));
+  }
+  if (governorate) {
+    const normGov = (s) => s.replace(/[ةه]/g, 'ه').replace(/[أإآا]/g, 'ا').trim();
+    const govNorm = normGov(governorate);
+    icDf = icDf.filter(r => normGov(String(r.governorate || '')) === govNorm);
+  }
+  if (nationality) {
+    icDf = icDf.filter(r => {
+      const rd = r.record_data || {};
+      return String(rd['الجنسية'] || rd['الجنسيه'] || '').includes(nationality);
+    });
+  }
+  if (asylum) {
+    icDf = icDf.filter(r => {
+      const rd = r.record_data || {};
+      return String(rd['موقف الحالة'] || rd['وضع الحاله في مصر'] || '').includes(asylum);
+    });
+  }
+  if (selectedYear !== 'all') {
+    icDf = icDf.filter(r => {
+      const dateVal = r.date_added || '';
+      const dateNum = parseFloat(dateVal);
+      if (!isNaN(dateNum) && dateNum > 20000 && dateNum < 60000) {
+        const jsDate = new Date(new Date(1899, 11, 30).getTime() + dateNum * 86400000);
+        return String(jsDate.getFullYear()) === selectedYear;
+      }
+      return String(dateVal).includes(selectedYear);
+    });
+  }
+  filteredICData = icDf;
+
   currentPage = 1;
   renderTable();
   updateSearchStats(code);
 
-  document.getElementById('statusText').textContent = `${filteredData.length.toLocaleString('ar-EG')} نتيجة`;
+  document.getElementById('statusText').textContent = `${filteredICData.length.toLocaleString('ar-EG')} نتيجة`;
 }
 
 function clearFilters() {
@@ -425,10 +539,12 @@ function clearFilters() {
   document.getElementById('tlDisplay').textContent = 'كل السنوات';
 
   filteredData = [...casesData];
+  filteredICData = [...icRecordsData];
   currentPage = 1;
   renderTable();
   updateSearchStats();
-  document.getElementById('statusText').textContent = `جاهز — ${casesData.length.toLocaleString('ar-EG')} سجل`;
+  const totalCount = icRecordsData.length > 0 ? icRecordsData.length : casesData.length;
+  document.getElementById('statusText').textContent = `جاهز — ${totalCount.toLocaleString('ar-EG')} سجل`;
 }
 
 // ── Filter by governorate (called from map click) ──
@@ -475,7 +591,8 @@ function filterByGovernorate(govName) {
 //  STATS CALCULATION
 // ══════════════════════════════════════════════════
 async function updateSearchStats(code) {
-  const casesCount = filteredData.length;
+  // Show IC records count as primary since table now shows IC data
+  const casesCount = filteredICData.length > 0 ? filteredICData.length : filteredData.length;
   
   // Collect all filter logic identical to doSearch to send to SQLite
   const filters = {
@@ -525,7 +642,7 @@ function animateValue(elementId, endVal) {
 function renderTable() {
   const tbody = document.getElementById('tableBody');
   const emptyState = document.getElementById('emptyState');
-  const totalRows = filteredData.length;
+  const totalRows = filteredICData.length;
 
   if (totalRows === 0) {
     tbody.innerHTML = '';
@@ -538,17 +655,17 @@ function renderTable() {
 
   const start = (currentPage - 1) * PAGE_SIZE;
   const end = Math.min(start + PAGE_SIZE, totalRows);
-  const pageData = filteredData.slice(start, end);
+  const pageData = filteredICData.slice(start, end);
 
-  tbody.innerHTML = pageData.map((row) => {
-    const ccode = escapeHtml(String(row['C-Code'] || ''));
+  tbody.innerHTML = pageData.map((row, idx) => {
+    const ccode = escapeHtml(String(row.c_code || ''));
+    const globalIdx = start + idx;
     return `
-    <tr onclick="selectRow(this, '${ccode.replace(/'/g, "\\\'")}')">
-      <td>${ccode}</td>
-      <td>${escapeHtml(String(row['Name'] || ''))}</td>
-      <td>${escapeHtml(String(row['Age'] || ''))}</td>
-      <td>${escapeHtml(String(row['الجنسية'] || ''))}</td>
-      <td>${escapeHtml(String(row['محافظة السكن الحالي'] || ''))}</td>
+    <tr onclick="selectICRow(this, ${globalIdx})">
+      <td><span class="code-cell">${ccode}</span></td>
+      <td>${escapeHtml(String(row.case_name || ''))}</td>
+      <td dir="ltr" style="text-align: center;">${escapeHtml(String(row.phone || '—'))}</td>
+      <td>${escapeHtml(String(row.date_added || '—'))}</td>
     </tr>`;
   }).join('');
 
@@ -614,7 +731,8 @@ function sortTable(col) {
     if (th.dataset.col === col) th.classList.add(sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
   });
 
-  filteredData.sort((a, b) => {
+  // Sort IC data (main table)
+  filteredICData.sort((a, b) => {
     let va = a[col] ?? '';
     let vb = b[col] ?? '';
 
@@ -634,68 +752,176 @@ function sortTable(col) {
 // ══════════════════════════════════════════════════
 //  ROW SELECTION → CASE MODAL
 // ══════════════════════════════════════════════════
-function selectRow(tr, code) {
+// ── IC Row click → Show IC data cards + Framework v5 data ──
+async function selectICRow(tr, globalIdx) {
   document.querySelectorAll('#tableBody tr').forEach(r => r.classList.remove('selected'));
   tr.classList.add('selected');
-  currentSelectedCode = code;
 
-  // Find the case data
-  const caseRow = casesData.find(r => String(r['C-Code'] || '').trim() === code);
-  if (!caseRow) return;
+  const icRecord = filteredICData[globalIdx];
+  if (!icRecord) return;
 
-  // Build modal content
+  currentSelectedCode = icRecord.c_code;
+  currentSelectedICRecord = icRecord;
+
+  // Update stat cards with this row's data
+  const relatedCases = casesData.filter(r => String(r['C-Code'] || '').trim() === icRecord.c_code);
+  animateValue('searchCases', relatedCases.length || 1);
+
+  // Build modal content: IC info cards at top + Framework v5 data below
   const modalBody = document.getElementById('caseModalBody');
-  modalBody.innerHTML = `
-    <div class="case-detail-grid">
-      <div class="case-detail-item">
-        <span class="case-detail-label">الكود</span>
-        <span class="case-detail-value case-code-link" onclick="openFrameworkDetails()" title="اضغط لعرض تفاصيل Framework">${escapeHtml(String(caseRow['C-Code'] || ''))}</span>
-      </div>
-      <div class="case-detail-item">
-        <span class="case-detail-label">اسم الحالة</span>
-        <span class="case-detail-value">${escapeHtml(String(caseRow['Name'] || 'غير معروف'))}</span>
-      </div>
-      <div class="case-detail-item">
-        <span class="case-detail-label">الجنسية</span>
-        <span class="case-detail-value">${escapeHtml(String(caseRow['الجنسية'] || '—'))}</span>
-      </div>
-      <div class="case-detail-item">
-        <span class="case-detail-label">العمر</span>
-        <span class="case-detail-value">${escapeHtml(String(caseRow['Age'] || '—'))} سنة</span>
-      </div>
-      <div class="case-detail-item">
-        <span class="case-detail-label">المحافظة</span>
-        <span class="case-detail-value">${escapeHtml(String(caseRow['محافظة السكن الحالي'] || '—'))}</span>
-      </div>
-      <div class="case-detail-item">
-        <span class="case-detail-label">الرقم القومي</span>
-        <span class="case-detail-value">${escapeHtml(String(caseRow['الرقم القومى'] || '—'))}</span>
-      </div>
-      <div class="case-detail-item">
-        <span class="case-detail-label">رقم المفاوضية للفرد</span>
-        <span class="case-detail-value">${escapeHtml(String(caseRow['رقم كارت المفاوضية للفرد'] || '—'))}</span>
-      </div>
-      <div class="case-detail-item">
-        <span class="case-detail-label">رقم المفاوضية للاسرة</span>
-        <span class="case-detail-value">${escapeHtml(String(caseRow['رقم ملف المفاوضية'] || '—'))}</span>
-      </div>
-      <div class="case-detail-item">
-        <span class="case-detail-label">تاريخ الإضافة</span>
-        <span class="case-detail-value">${escapeHtml(String(caseRow['CreatedOn'] || '—'))}</span>
-      </div>
-      <div class="case-detail-item">
-        <span class="case-detail-label">موقف اللجوء</span>
-        <span class="case-detail-value">${escapeHtml(String(caseRow['موقف اللجوء'] || '—'))}</span>
+  
+  // Part 1: IC Record Cards
+  let html = `
+    <div class="ic-info-section">
+      <h4 class="section-title">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00A99D" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        بيانات IC
+      </h4>
+      <div class="case-detail-grid">
+        <div class="case-detail-item">
+          <span class="case-detail-label">كود الحالة</span>
+          <span class="case-detail-value case-code-link" onclick="openFrameworkDetails()" title="اضغط لعرض تفاصيل Framework">${escapeHtml(icRecord.c_code)}</span>
+        </div>
+        <div class="case-detail-item">
+          <span class="case-detail-label">اسم الحالة</span>
+          <span class="case-detail-value">${escapeHtml(icRecord.case_name || 'غير معروف')}</span>
+        </div>
+        <div class="case-detail-item">
+          <span class="case-detail-label">موبايل</span>
+          <span class="case-detail-value" dir="ltr">${escapeHtml(icRecord.phone || '—')}</span>
+        </div>
+        <div class="case-detail-item">
+          <span class="case-detail-label">تاريخ الاضافه</span>
+          <span class="case-detail-value">${escapeHtml(icRecord.date_added || '—')}</span>
+        </div>
+        <div class="case-detail-item">
+          <span class="case-detail-label">المحافظة</span>
+          <span class="case-detail-value">${escapeHtml(icRecord.governorate || '—')}</span>
+        </div>
       </div>
     </div>
   `;
 
-  // Show modal
+  // Part 2: Show all extra IC record_data fields
+  if (icRecord.record_data && Object.keys(icRecord.record_data).length > 0) {
+    html += `
+      <div class="ic-extra-section" style="margin-top: 1.5rem;">
+        <h4 class="section-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E8A900" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          بيانات إضافية من IC
+        </h4>
+        <div class="case-detail-grid">
+    `;
+    for (const [key, val] of Object.entries(icRecord.record_data)) {
+      const strVal = String(val || '').trim();
+      if (!strVal || key.toLowerCase().includes('__empty') || key === '') continue;
+      html += `
+        <div class="case-detail-item">
+          <span class="case-detail-label">${escapeHtml(key)}</span>
+          <span class="case-detail-value">${escapeHtml(strVal)}</span>
+        </div>
+      `;
+    }
+    html += '</div></div>';
+  }
+
+  // Part 3: Loading placeholder for Framework v5 data
+  html += `
+    <div class="fw-preview-section" id="fwPreviewSection" style="margin-top: 1.5rem;">
+      <h4 class="section-title">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2196f3" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        بيانات Framework v5
+      </h4>
+      <div id="fwPreviewContent" style="text-align:center; padding:1.5rem;">
+        <div class="loading-spinner" style="width:24px;height:24px;border-width:3px;margin:0 auto 0.8rem;"></div>
+        <p style="color:var(--text-secondary); font-size: 0.9rem;">جاري تحميل بيانات Framework...</p>
+      </div>
+    </div>
+  `;
+
+  modalBody.innerHTML = html;
   document.getElementById('caseModal').classList.remove('hidden');
+
+  // Async load Framework v5 data
+  try {
+    const fwResult = await window.electronAPI.getFrameworkData(icRecord.c_code);
+    const fwContent = document.getElementById('fwPreviewContent');
+    if (!fwContent) return;
+
+    if (fwResult.records && fwResult.records.length > 0) {
+      let fwHtml = '<div class="case-detail-grid">';
+      for (const record of fwResult.records) {
+        for (const [key, val] of Object.entries(record.data)) {
+          const strVal = String(val || '').trim();
+          if (!strVal) continue;
+          fwHtml += `
+            <div class="case-detail-item">
+              <span class="case-detail-label">${escapeHtml(key)}</span>
+              <span class="case-detail-value">${escapeHtml(strVal)}</span>
+            </div>
+          `;
+        }
+      }
+      fwHtml += '</div>';
+      fwContent.innerHTML = fwHtml;
+    } else {
+      // Fallback: try to get cases data
+      const caseRow = casesData.find(r => String(r['C-Code'] || '').trim() === icRecord.c_code);
+      if (caseRow) {
+        let fwHtml = '<div class="case-detail-grid">';
+        const fields = [
+          { label: 'الكود', key: 'C-Code' },
+          { label: 'اسم الحالة', key: 'Name' },
+          { label: 'العمر', key: 'Age' },
+          { label: 'الجنسية', key: 'الجنسية' },
+          { label: 'الرقم القومي', key: 'الرقم القومى' },
+          { label: 'رقم المفاوضية للفرد', key: 'رقم كارت المفاوضية للفرد' },
+          { label: 'رقم المفاوضية للاسرة', key: 'رقم ملف المفاوضية' },
+          { label: 'المحافظة', key: 'محافظة السكن الحالي' },
+          { label: 'موقف اللجوء', key: 'موقف اللجوء' },
+          { label: 'تاريخ الإضافة', key: 'CreatedOn' },
+        ];
+        for (const f of fields) {
+          const v = String(caseRow[f.key] || '').trim();
+          if (v) {
+            fwHtml += `<div class="case-detail-item"><span class="case-detail-label">${escapeHtml(f.label)}</span><span class="case-detail-value">${escapeHtml(v)}</span></div>`;
+          }
+        }
+        fwHtml += '</div>';
+        fwContent.innerHTML = fwHtml;
+      } else {
+        fwContent.innerHTML = '<p style="color:var(--text-secondary); font-size: 0.9rem;">لا توجد بيانات Framework لهذا الكود بعد.</p>';
+      }
+    }
+  } catch (err) {
+    const fwContent = document.getElementById('fwPreviewContent');
+    if (fwContent) fwContent.innerHTML = `<p style="color:var(--danger);">خطأ: ${err.message}</p>`;
+  }
+}
+
+// Legacy function for backward compatibility
+function selectRow(tr, code) {
+  const idx = filteredICData.findIndex(r => r.c_code === code);
+  if (idx >= 0) selectICRow(tr, idx);
 }
 
 function closeCaseModal() {
   document.getElementById('caseModal').classList.add('hidden');
+}
+
+// Navigate to Profile tab from the modal
+function goToProfileFromModal() {
+  closeCaseModal();
+  const code = currentSelectedCode;
+  if (!code) return;
+
+  // Switch to profile tab and auto-search
+  switchTab('profile');
+  const profileInput = document.getElementById('profileSearchInput');
+  if (profileInput) {
+    profileInput.value = code;
+    searchProfile();
+  }
 }
 
 async function openFrameworkDetails() {
@@ -814,7 +1040,7 @@ function switchTab(tabId) {
 async function exportExcel() {
   document.getElementById('statusText').textContent = 'جارٍ التصدير...';
   try {
-    const result = await window.electronAPI.exportExcel(filteredData);
+    const result = await window.electronAPI.exportExcel(filteredICData);
     if (result.saved) {
       document.getElementById('statusText').textContent = `✅ تم الحفظ: ${result.path}`;
     } else {
@@ -871,8 +1097,40 @@ async function applyDashboardFilters() {
   const nationality = document.getElementById('dashNationality').value;
   const service = document.getElementById('dashService').value;
 
-  // Filter cases natively
-  let filtC = [...casesData];
+  // Convert IC records to chart-compatible format
+  const useIC = icRecordsData.length > 0;
+  let chartData;
+
+  if (useIC) {
+    chartData = icRecordsData.map(r => {
+      const rd = r.record_data || {};
+      // Extract year from date_added (could be Excel serial or formatted date)
+      let year = '';
+      const dateVal = r.date_added || rd['تاريخ الاضافة'] || '';
+      const dateNum = parseFloat(dateVal);
+      if (!isNaN(dateNum) && dateNum > 20000 && dateNum < 60000) {
+        const jsDate = new Date(new Date(1899, 11, 30).getTime() + dateNum * 86400000);
+        year = String(jsDate.getFullYear());
+      } else if (typeof dateVal === 'string' && dateVal.includes('/')) {
+        const parts = dateVal.split('/');
+        year = parts[parts.length - 1].length === 4 ? parts[parts.length - 1] : parts[0];
+      }
+      return {
+        'الجنسية': rd['الجنسية'] || rd['الجنسيه'] || '',
+        'Age': rd['السن'] || '',
+        'موقف اللجوء': rd['موقف الحالة'] || rd['وضع الحاله في مصر'] || '',
+        'محافظة السكن الحالي': r.governorate || rd['المحافظة'] || '',
+        'Year': year,
+        // Keep original IC fields for map
+        governorate: r.governorate || '',
+      };
+    });
+  } else {
+    chartData = [...casesData];
+  }
+
+  // Apply dashboard filters
+  let filtC = [...chartData];
   if (asylum) filtC = filtC.filter(r => String(r['موقف اللجوء'] || '').includes(asylum));
   if (nationality) filtC = filtC.filter(r => String(r['الجنسية'] || '').includes(nationality));
   if (ageGroup) {
@@ -896,7 +1154,7 @@ async function applyDashboardFilters() {
   animateValue('dashServices', Math.floor(svcSum));
   animateValue('dashCost', Math.floor(costSum));
 
-  // Update all charts
+  // All charts now use the same IC-based data
   updateMap(filtC);
   updateBarChart(filtC);
   updateAgeChart(filtC);
@@ -926,15 +1184,21 @@ function updateMap(data) {
   dashMarkers.forEach(m => dashMap.removeLayer(m));
   dashMarkers = [];
 
-  // Count by governorate
+  // Count by governorate (normalize variants to canonical name)
+  const GOV_CANONICAL = {
+    'الجيزه': 'الجيزة', 'القاهره': 'القاهرة', 'الاسكندريه': 'الاسكندرية',
+    'الدقهليه': 'الدقهلية', 'دقهليه': 'دقهلية', 'الشرقيه': 'الشرقية', 'شرقيه': 'شرقية',
+    'القليوبيه': 'القليوبية', 'قليوبيه': 'قليوبية', 'الغربيه': 'الغربية', 'غربيه': 'غربية',
+    'المنوفيه': 'المنوفية', 'منوفيه': 'منوفية', 'البحيره': 'البحيرة', 'بحيره': 'بحيرة',
+    'الاسماعيليه': 'الاسماعيلية', 'بنى سويف': 'بني سويف', 'الوادى الجديد': 'الوادي الجديد',
+  };
   const counts = {};
   data.forEach(r => {
-    let gov = String(r['محافظة السكن الحالي'] || '').trim();
+    let gov = String(r['محافظة السكن الحالي'] || r.governorate || '').trim();
     if (!gov) return;
-    // Normalize the name
+    gov = GOV_CANONICAL[gov] || gov; // Normalize to canonical
     const loc = GOV_LOCATIONS[gov];
     if (loc) {
-      // Use the first matching key as canonical name
       counts[gov] = (counts[gov] || 0) + 1;
     }
   });

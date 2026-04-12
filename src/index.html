@@ -230,15 +230,10 @@
             <table id="dataTable">
               <thead>
                 <tr>
-                  <th class="sortable" data-col="C-Code" onclick="sortTable('C-Code')">الكود <span class="sort-icon">↕</span></th>
-                  <th class="sortable" data-col="Name" onclick="sortTable('Name')">الاسم <span class="sort-icon">↕</span></th>
-                  <th class="sortable" data-col="Age" onclick="sortTable('Age')">العمر <span class="sort-icon">↕</span></th>
-                  <th>الجنسية</th>
-                  <th>الرقم القومي</th>
-                  <th>رقم المفاوضية للفرد</th>
-                  <th>رقم المفاوضية للاسرة</th>
-                  <th>المحافظة</th>
-                  <th>موقف اللجوء</th>
+                  <th class="sortable" data-col="c_code" onclick="sortTable('c_code')">كود الحالة <span class="sort-icon">↕</span></th>
+                  <th class="sortable" data-col="case_name" onclick="sortTable('case_name')">اسم الحالة <span class="sort-icon">↕</span></th>
+                  <th>موبايل</th>
+                  <th class="sortable" data-col="date_added" onclick="sortTable('date_added')">تاريخ الاضافه <span class="sort-icon">↕</span></th>
                 </tr>
               </thead>
               <tbody id="tableBody">
@@ -626,23 +621,27 @@
 
     <!-- ═══════════ CASE DETAIL MODAL ═══════════ -->
     <div class="modal-overlay hidden" id="caseModal">
-      <div class="modal-card">
+      <div class="modal-card modal-wide">
         <div class="modal-header">
           <h3>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            تفاصيل الحالة
+            بيانات الحالة
           </h3>
           <button class="modal-close" onclick="closeCaseModal()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
         <div class="modal-body" id="caseModalBody">
-          <!-- Populated by JS -->
+          <!-- Populated by JS: IC cards + Framework v5 data -->
         </div>
-        <div class="modal-footer">
+        <div class="modal-footer" style="display: flex; gap: 10px;">
           <button class="btn-framework" id="btnFramework" onclick="openFrameworkDetails()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            عرض تفاصيل إضافية (Framework)
+            عرض تفاصيل Framework كاملة
+          </button>
+          <button class="btn-framework" id="btnGoProfile" onclick="goToProfileFromModal()" style="background: linear-gradient(135deg, #2196f3, #1976d2);">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            عرض ملف الحالة الكامل
           </button>
         </div>
       </div>
