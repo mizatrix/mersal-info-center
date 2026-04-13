@@ -1,11 +1,9 @@
-name: Build Windows Application
+name: Build Windows Installer (with Data)
 
 on:
   push:
     branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
-  workflow_dispatch: # Allows manual trigger
+  workflow_dispatch: # Allows manual trigger from GitHub UI
 
 permissions:
   contents: write
@@ -15,50 +13,64 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - name: Checkout code
+    - name: Checkout code (with LFS)
       uses: actions/checkout@v4
+      with:
+        lfs: true          # ← pulls the 276 MB mersal.db from Git LFS
 
-    - name: Setup Node.js
+    - name: Verify database exists
+      shell: bash
+      run: |
+        echo "=== Checking mersal.db ==="
+        ls -lh mersal.db
+        file mersal.db
+        DB_SIZE=$(stat --printf="%s" mersal.db)
+        echo "Database size: $DB_SIZE bytes"
+        if [ "$DB_SIZE" -lt 1000000 ]; then
+          echo "❌ ERROR: mersal.db is too small ($DB_SIZE bytes) — LFS pull likely failed!"
+          echo "   This is probably just an LFS pointer file, not the real database."
+          exit 1
+        fi
+        echo "✅ Database looks good ($(($DB_SIZE / 1024 / 1024)) MB)"
+
+    - name: Setup Node.js 22
       uses: actions/setup-node@v4
       with:
         node-version: 22
 
-    - name: Install Dependencies
+    - name: Install dependencies
       run: npm install
 
-    # --- FULL VERSION (WITH DATA) ---
-    - name: Build Windows App (With Data)
+    - name: Build Windows installer + portable
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: npm run build:win
 
-    - name: Upload Installer (With Data)
-      uses: actions/upload-artifact@v4
-      with:
-        name: Mersal-Info-Center-Setup-With-Data
-        path: "build/Mersal Info Center Setup*.exe"
-
-    # --- EMPTY VERSION (NO DATA) ---
-    - name: Wipe Database for Empty Build
+    - name: List build output
       shell: bash
       run: |
-        rm -f mersal.db
-        touch mersal.db
+        echo "=== Build output ==="
+        ls -lh build/ || true
+        echo "=== Setup files ==="
+        ls -lh build/*.exe 2>/dev/null || echo "No exe files found"
+        echo "=== Portable ==="
+        ls -lh build/win-unpacked/ 2>/dev/null | head -20 || echo "No portable folder"
 
-    - name: Build Windows App (Empty)
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: npm run build:win
-
-    - name: Upload Installer (Empty)
+    # ── Upload the NSIS installer (one-click setup EXE with data) ──
+    - name: Upload Installer (with Data)
       uses: actions/upload-artifact@v4
       with:
-        name: Mersal-Info-Center-Setup-Empty
-        path: "build/Mersal Info Center Setup*.exe"
+        name: Mersal-Info-Center-Installer
+        path: |
+          build/Mersal Info Center Setup*.exe
+        if-no-files-found: error
+        compression-level: 1   # already compressed by NSIS
 
-    # Upload the portable folder of the empty version just in case
-    - name: Upload Portable
+    # ── Upload the portable version (no install needed) ──
+    - name: Upload Portable (with Data)
       uses: actions/upload-artifact@v4
       with:
         name: Mersal-Info-Center-Portable
         path: build/win-unpacked/
+        if-no-files-found: error
+        compression-level: 1
